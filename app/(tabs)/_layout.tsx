@@ -1,33 +1,75 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import React from 'react';
-
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { COLORS, FONTS } from '../../src/constants/theme';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+      screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: keyof typeof Ionicons.glyphMap;
+
+          if (route.name === 'index') {
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'search') {
+            iconName = focused ? 'search' : 'search-outline';
+          } else if (route.name === 'cart') {
+            iconName = focused ? 'bag' : 'bag-outline';
+          } else if (route.name === 'orders') {
+            iconName = focused ? 'receipt' : 'receipt-outline';
+          } else if (route.name === 'profile') {
+            iconName = focused ? 'person' : 'person-outline';
+          } else {
+            iconName = 'help-outline';
+          }
+
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.gray[500],
+        tabBarStyle: {
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 8,
+          backgroundColor: COLORS.white,
+          borderTopWidth: 1,
+          borderTopColor: COLORS.borderLight,
+        },
+        tabBarLabelStyle: {
+          fontSize: FONTS.sizes.xs,
+          fontWeight: '600',
+        },
+      })}
+    >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="search"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Search',
+        }}
+      />
+      <Tabs.Screen
+        name="cart"
+        options={{
+          title: 'Cart',
+        }}
+      />
+      <Tabs.Screen
+        name="orders"
+        options={{
+          title: 'Orders',
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
         }}
       />
     </Tabs>

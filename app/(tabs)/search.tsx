@@ -112,7 +112,10 @@ export default function Search() {
           renderItem={({ item }) => (
             <FoodCard
               foodItem={item}
-              onPress={() => console.log('Food pressed:', item.name)}
+              onPress={() => router.push({
+                pathname: '/food-detail',
+                params: { id: item.id }
+              })}
               onAddToCart={() => console.log('Add to cart:', item.name)}
               onToggleFavorite={() => console.log('Toggle favorite:', item.name)}
             />

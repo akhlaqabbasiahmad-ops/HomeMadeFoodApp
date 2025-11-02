@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
     Alert,
@@ -16,10 +17,11 @@ import { COLORS, FONTS } from '../../constants/theme';
 import { apiService } from '../../services/apiService';
 
 interface AddCategoryScreenProps {
-  navigation: any;
+  navigation?: any; // Keep for backward compatibility
 }
 
 const AddCategoryScreen: React.FC<AddCategoryScreenProps> = ({ navigation }) => {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -47,7 +49,6 @@ const AddCategoryScreen: React.FC<AddCategoryScreenProps> = ({ navigation }) => 
 
     setIsSubmitting(true);
     try {
-      console.log('🚀 Submitting category:', formData);
       const response = await apiService.createCategory({
         name: formData.name.trim(),
         description: formData.description.trim() || undefined,
@@ -63,7 +64,7 @@ const AddCategoryScreen: React.FC<AddCategoryScreenProps> = ({ navigation }) => 
               text: 'OK',
               onPress: () => {
                 setFormData({ name: '', description: '', icon: '' });
-                navigation.goBack();
+                router.back();
               },
             },
           ]

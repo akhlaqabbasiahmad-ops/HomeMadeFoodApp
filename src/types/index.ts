@@ -5,6 +5,7 @@ export interface User {
   email: string;
   phone: string;
   avatar?: string;
+  role: string;
   address?: Address[];
 }
 
@@ -276,4 +277,44 @@ export interface NotificationData {
   data?: any;
   timestamp: Date;
   isRead: boolean;
+}
+
+// Meal Suggestion types
+export interface MealSuggestion {
+  fromApp: {
+    meal: {
+      id: string;
+      name: string;
+      description: string;
+      category: string;
+      price: number;
+      restaurantName: string;
+      image: string;
+      rating: number;
+    };
+    reason: string;
+    nutritionalInfo: {
+      calories: number;
+      isVegetarian: boolean;
+      isVegan: boolean;
+      isSpicy: boolean;
+    };
+  };
+  culturalSuggestion: {
+    name: string;
+    description: string;
+    category: string;
+    reason: string;
+    culturalContext: string;
+    season: string;
+    weather: string;
+    estimatedPrice: number;
+    nutritionalInfo: {
+      calories: number;
+      isVegetarian: boolean;
+      isVegan: boolean;
+      isSpicy: boolean;
+    };
+    image: string;
+  };
 }

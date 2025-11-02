@@ -69,14 +69,20 @@ export const checkAuthStatus = createAsyncThunk(
   'auth/checkStatus',
   async (_, { rejectWithValue }) => {
     try {
+      // Fast local check - don't make API calls during initialization
       const { isAuthenticated, user } = await authService.checkAuthStatus();
       if (isAuthenticated && user) {
         const token = await authService.getToken();
+        
+        // Initialize apiService with token (fast, no network calls)
+        await authService.initializeAuth();
+        
         return { user, token };
       } else {
         return rejectWithValue('Not authenticated');
       }
     } catch (error: any) {
+      // Don't block app startup on auth errors
       return rejectWithValue(error.message || 'Auth check failed');
     }
   }

@@ -1,113 +1,95 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  FlatList,
-  StyleSheet,
-  Dimensions,
-  StatusBar,
-  Image,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Dimensions,
+    FlatList,
+    Image,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import FoodCard from '../../components/Food/FoodCard';
-import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
-import { Restaurant, FoodItem } from '../../types';
+import { COLORS, FONTS, RADIUS, SPACING } from '../../constants/theme';
+import { apiService } from '../../services/apiService';
+import { FoodItem, Restaurant } from '../../types';
 
 const { height } = Dimensions.get('window');
 
-// Mock restaurant data
-const mockRestaurant: Restaurant = {
-  id: '1',
-  name: "Mario's Pizzeria",
-  description: 'Authentic Italian cuisine with fresh ingredients and traditional recipes',
-  image: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b',
-  rating: 4.8,
-  reviews: 256,
-  deliveryTime: '25-35 min',
-  deliveryFee: 2.99,
-  minimumOrder: 15,
-  categories: ['Pizza', 'Italian', 'Pasta'],
-  isOpen: true,
-  distance: 1.2,
-  coordinates: { latitude: 40.7128, longitude: -74.0060 },
-};
-
-const mockFoodItems: FoodItem[] = [
-  {
-    id: '1',
-    name: 'Margherita Pizza',
-    description: 'Classic Italian pizza with fresh mozzarella, tomato sauce, and basil',
-    image: 'https://images.unsplash.com/photo-1565298507278-760aac2d3d0a',
-    price: 12.99,
-    originalPrice: 15.99,
-    rating: 4.8,
-    reviews: 124,
-    category: 'Pizza',
-    restaurantId: '1',
-    restaurantName: "Mario's Pizzeria",
-    ingredients: ['Mozzarella', 'Tomato Sauce', 'Basil', 'Olive Oil'],
-    allergens: ['Gluten', 'Dairy'],
-    isVegetarian: true,
-    isVegan: false,
-    isSpicy: false,
-    preparationTime: 15,
-    calories: 280,
-  },
-  {
-    id: '2',
-    name: 'Pepperoni Pizza',
-    description: 'Traditional pizza with pepperoni, mozzarella cheese, and tomato sauce',
-    image: 'https://images.unsplash.com/photo-1628840042765-356cda07504e',
-    price: 16.99,
-    rating: 4.7,
-    reviews: 98,
-    category: 'Pizza',
-    restaurantId: '1',
-    restaurantName: "Mario's Pizzeria",
-    ingredients: ['Pepperoni', 'Mozzarella', 'Tomato Sauce'],
-    allergens: ['Gluten', 'Dairy'],
-    isVegetarian: false,
-    isVegan: false,
-    isSpicy: false,
-    preparationTime: 18,
-    calories: 320,
-  },
-  {
-    id: '3',
-    name: 'Chicken Alfredo Pasta',
-    description: 'Creamy pasta with grilled chicken and alfredo sauce',
-    image: 'https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5',
-    price: 18.99,
-    rating: 4.6,
-    reviews: 76,
-    category: 'Pasta',
-    restaurantId: '1',
-    restaurantName: "Mario's Pizzeria",
-    ingredients: ['Pasta', 'Chicken', 'Alfredo Sauce', 'Parmesan'],
-    allergens: ['Gluten', 'Dairy'],
-    isVegetarian: false,
-    isVegan: false,
-    isSpicy: false,
-    preparationTime: 20,
-    calories: 450,
-  },
-];
-
-const mockCategories = ['All', 'Pizza', 'Pasta', 'Salads', 'Drinks', 'Desserts'];
-
 const RestaurantScreen = () => {
   const navigation = useNavigation();
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const restaurantId = params.id as string;
+
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [isFavorite, setIsFavorite] = useState(false);
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
+  const [categories, setCategories] = useState<string[]>(['All']);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!restaurantId) {
+        setError('Restaurant ID is required');
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // Fetch restaurant details
+        const restaurantResponse = await apiService.getRestaurantById(restaurantId);
+        if (restaurantResponse.success && restaurantResponse.data) {
+          setRestaurant(restaurantResponse.data);
+        } else {
+          setError('Restaurant not found');
+          setRestaurant(null);
+        }
+
+        // Fetch food items for this restaurant
+        const foodResponse = await apiService.getFoodItems({
+          restaurantId,
+        });
+        if (foodResponse.success && foodResponse.data?.items) {
+          setFoodItems(foodResponse.data.items);
+          
+          // Extract unique categories from food items
+          const uniqueCategories = ['All', ...Array.from(new Set(foodResponse.data.items.map((item: FoodItem) => item.category)))];
+          setCategories(uniqueCategories);
+        } else {
+          setFoodItems([]);
+          setCategories(['All']);
+        }
+      } catch (err) {
+        if (__DEV__) {
+          console.error('Error fetching restaurant data:', err);
+        }
+        setError('Failed to load restaurant data');
+        setRestaurant(null);
+        setFoodItems([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [restaurantId]);
 
   // Filter food items based on selected category
   const filteredFoodItems = selectedCategory === 'All' 
-    ? mockFoodItems 
-    : mockFoodItems.filter(item => item.category === selectedCategory);
+    ? foodItems 
+    : foodItems.filter(item => item.category === selectedCategory);
 
   const CategoryTab = ({ category }: { category: string }) => (
     <TouchableOpacity
@@ -144,6 +126,35 @@ const RestaurantScreen = () => {
     </View>
   );
 
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading restaurant...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (error || !restaurant) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={64} color={COLORS.error} />
+          <Text style={styles.errorTitle}>Restaurant Not Found</Text>
+          <Text style={styles.errorText}>{error || 'The restaurant you are looking for does not exist.'}</Text>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar backgroundColor="transparent" barStyle="light-content" translucent />
@@ -151,9 +162,10 @@ const RestaurantScreen = () => {
       {/* Header Image */}
       <View style={styles.headerContainer}>
         <Image
-          source={{ uri: mockRestaurant.image }}
+          source={{ uri: restaurant.image }}
           style={styles.headerImage}
           resizeMode="cover"
+          defaultSource={require('../../../assets/images/icon.png')}
         />
         
         {/* Header Overlay */}
@@ -193,10 +205,10 @@ const RestaurantScreen = () => {
         <View style={styles.restaurantStatus}>
           <View style={[
             styles.statusIndicator,
-            { backgroundColor: mockRestaurant.isOpen ? COLORS.success : COLORS.error }
+            { backgroundColor: restaurant.isOpen ? COLORS.success : COLORS.error }
           ]} />
           <Text style={styles.statusText}>
-            {mockRestaurant.isOpen ? 'Open Now' : 'Closed'}
+            {restaurant.isOpen ? 'Open Now' : 'Closed'}
           </Text>
         </View>
       </View>
@@ -204,22 +216,24 @@ const RestaurantScreen = () => {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Restaurant Info */}
         <View style={styles.restaurantInfo}>
-          <Text style={styles.restaurantName}>{mockRestaurant.name}</Text>
-          <Text style={styles.restaurantDescription}>{mockRestaurant.description}</Text>
+          <Text style={styles.restaurantName}>{restaurant.name}</Text>
+          <Text style={styles.restaurantDescription}>{restaurant.description}</Text>
           
           <View style={styles.ratingContainer}>
             <Ionicons name="star" size={16} color={COLORS.rating} />
-            <Text style={styles.ratingText}>{mockRestaurant.rating}</Text>
-            <Text style={styles.reviewsText}>({mockRestaurant.reviews} reviews)</Text>
+            <Text style={styles.ratingText}>{restaurant.rating}</Text>
+            <Text style={styles.reviewsText}>({restaurant.reviews} reviews)</Text>
           </View>
 
-          <View style={styles.categoriesContainer}>
-            {mockRestaurant.categories.map((category, index) => (
-              <View key={index} style={styles.categoryBadge}>
-                <Text style={styles.categoryBadgeText}>{category}</Text>
-              </View>
-            ))}
-          </View>
+          {restaurant.categories && restaurant.categories.length > 0 && (
+            <View style={styles.categoriesContainer}>
+              {restaurant.categories.map((category, index) => (
+                <View key={index} style={styles.categoryBadge}>
+                  <Text style={styles.categoryBadgeText}>{category}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Delivery Info */}
@@ -227,46 +241,63 @@ const RestaurantScreen = () => {
           <InfoItem
             icon="time-outline"
             title="Delivery Time"
-            subtitle={mockRestaurant.deliveryTime}
+            subtitle={restaurant.deliveryTime || 'N/A'}
           />
           <InfoItem
             icon="bicycle-outline"
             title="Delivery Fee"
-            subtitle={`$${mockRestaurant.deliveryFee}`}
+            subtitle={`$${restaurant.deliveryFee || 0}`}
           />
           <InfoItem
             icon="card-outline"
             title="Minimum Order"
-            subtitle={`$${mockRestaurant.minimumOrder}`}
+            subtitle={`$${restaurant.minimumOrder || 0}`}
           />
         </View>
 
         {/* Menu Categories */}
-        <View style={styles.menuSection}>
-          <Text style={styles.menuTitle}>Menu</Text>
-          
-          <FlatList
-            data={mockCategories}
-            renderItem={({ item }) => <CategoryTab category={item} />}
-            keyExtractor={(item) => item}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryTabs}
-          />
-        </View>
+        {categories.length > 1 && (
+          <View style={styles.menuSection}>
+            <Text style={styles.menuTitle}>Menu</Text>
+            
+            <FlatList
+              data={categories}
+              renderItem={({ item }) => <CategoryTab category={item} />}
+              keyExtractor={(item) => item}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryTabs}
+            />
+          </View>
+        )}
 
         {/* Food Items */}
         <View style={styles.foodItemsContainer}>
-          {filteredFoodItems.map((item) => (
-            <View key={item.id} style={styles.foodItemWrapper}>
-              <FoodCard
-                foodItem={item}
-                onPress={() => console.log('Food pressed:', item.name)}
-                onAddToCart={() => console.log('Add to cart:', item.name)}
-                onToggleFavorite={() => console.log('Toggle favorite:', item.name)}
-              />
+          {filteredFoodItems.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="fast-food-outline" size={64} color={COLORS.text.tertiary} />
+              <Text style={styles.emptyTitle}>No Products Found</Text>
+              <Text style={styles.emptyText}>
+                {selectedCategory === 'All' 
+                  ? 'This restaurant has no products available yet.' 
+                  : `No products found in ${selectedCategory} category.`}
+              </Text>
             </View>
-          ))}
+          ) : (
+            filteredFoodItems.map((item) => (
+              <View key={item.id} style={styles.foodItemWrapper}>
+                <FoodCard
+                  foodItem={item}
+                  onPress={() => router.push({
+                    pathname: '/food-detail',
+                    params: { id: item.id }
+                  })}
+                  onAddToCart={() => console.log('Add to cart:', item.name)}
+                  onToggleFavorite={() => console.log('Toggle favorite:', item.name)}
+                />
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
     </View>
@@ -277,6 +308,46 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.white,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: SPACING.base,
+    fontSize: FONTS.sizes.base,
+    color: COLORS.text.secondary,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.base,
+  },
+  errorTitle: {
+    fontSize: FONTS.sizes.xl,
+    fontWeight: 'bold',
+    color: COLORS.text.primary,
+    marginTop: SPACING.base,
+    marginBottom: SPACING.sm,
+  },
+  errorText: {
+    fontSize: FONTS.sizes.base,
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    marginBottom: SPACING.xl,
+  },
+  backButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.lg,
+  },
+  backButtonText: {
+    color: COLORS.white,
+    fontSize: FONTS.sizes.base,
+    fontWeight: '600',
   },
   headerContainer: {
     position: 'relative',
@@ -460,6 +531,24 @@ const styles = StyleSheet.create({
   },
   foodItemWrapper: {
     marginBottom: SPACING.base,
+  },
+  emptyContainer: {
+    paddingVertical: SPACING.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: FONTS.sizes.xl,
+    fontWeight: 'bold',
+    color: COLORS.text.primary,
+    marginTop: SPACING.base,
+    marginBottom: SPACING.sm,
+  },
+  emptyText: {
+    fontSize: FONTS.sizes.base,
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    paddingHorizontal: SPACING.base,
   },
 });
 

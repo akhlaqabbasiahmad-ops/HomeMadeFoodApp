@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { apiService } from '../services/apiService';
 import { useAppSelector } from '../store';
+import { Order } from '../types';
 
 export interface OrderItem {
   id: string;
@@ -43,102 +45,6 @@ export interface UseOrdersReturn {
   reorderItems: (orderId: string) => Promise<void>;
 }
 
-// Mock orders data
-const mockOrders: Order[] = [
-  {
-    id: '1',
-    orderNumber: 'HMF001',
-    items: [
-      {
-        id: '1',
-        foodItemId: '1',
-        name: 'Margherita Pizza',
-        image: 'https://images.unsplash.com/photo-1565298507278-760aac2d3d0a',
-        price: 12.99,
-        quantity: 1,
-      },
-      {
-        id: '2',
-        foodItemId: '2',
-        name: 'Caesar Salad',
-        image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd',
-        price: 8.99,
-        quantity: 1,
-      },
-    ],
-    totalAmount: 24.97,
-    deliveryFee: 2.99,
-    status: 'delivered',
-    restaurantId: '1',
-    restaurantName: "Mario's Pizzeria",
-    estimatedTime: 30,
-    actualDeliveryTime: '25 min',
-    orderDate: '2025-10-14T10:30:00Z',
-    deliveryAddress: {
-      street: '123 Main St',
-      city: 'New York',
-      zipCode: '10001',
-    },
-    paymentMethod: 'Credit Card',
-  },
-  {
-    id: '2',
-    orderNumber: 'HMF002',
-    items: [
-      {
-        id: '3',
-        foodItemId: '3',
-        name: 'Beef Burger Deluxe',
-        image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd',
-        price: 14.50,
-        quantity: 2,
-        specialInstructions: 'No onions, extra cheese',
-      },
-    ],
-    totalAmount: 32.99,
-    deliveryFee: 3.49,
-    status: 'preparing',
-    restaurantId: '2',
-    restaurantName: 'Burger House',
-    estimatedTime: 25,
-    orderDate: '2025-10-14T12:15:00Z',
-    deliveryAddress: {
-      street: '456 Oak Ave',
-      city: 'New York',
-      zipCode: '10002',
-    },
-    paymentMethod: 'PayPal',
-    customerNotes: 'Please call when you arrive',
-  },
-  {
-    id: '3',
-    orderNumber: 'HMF003',
-    items: [
-      {
-        id: '4',
-        foodItemId: '4',
-        name: 'Chicken Tikka Masala',
-        image: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641',
-        price: 16.99,
-        quantity: 1,
-      },
-    ],
-    totalAmount: 19.98,
-    deliveryFee: 2.99,
-    status: 'confirmed',
-    restaurantId: '3',
-    restaurantName: 'Spice Palace',
-    estimatedTime: 40,
-    orderDate: '2025-10-14T13:45:00Z',
-    deliveryAddress: {
-      street: '789 Pine St',
-      city: 'New York',
-      zipCode: '10003',
-    },
-    paymentMethod: 'Credit Card',
-  },
-];
-
 export const useOrders = (): UseOrdersReturn => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
@@ -147,28 +53,34 @@ export const useOrders = (): UseOrdersReturn => {
   
   const user = useAppSelector((state) => state.auth.user);
 
-  // Simulate API call to fetch orders
+  // Fetch orders from API
   const fetchOrders = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
       if (user) {
-        setOrders(mockOrders);
-        // Set current order (most recent non-delivered order)
-        const current = mockOrders.find(order => 
-          ['pending', 'confirmed', 'preparing', 'ready'].includes(order.status)
-        );
-        setCurrentOrder(current || null);
+        const response = await apiService.getOrderHistory();
+        
+        if (response.success && response.data) {
+          setOrders(response.data);
+          // Set current order (most recent non-delivered order)
+          const current = response.data.find((order: Order) => 
+            ['pending', 'confirmed', 'preparing', 'ready'].includes(order.status)
+          );
+          setCurrentOrder(current || null);
+        } else {
+          setOrders([]);
+          setCurrentOrder(null);
+          setError(response.error || 'Failed to fetch orders');
+        }
       } else {
         setOrders([]);
         setCurrentOrder(null);
       }
-    } catch {
+    } catch (err) {
       setError('Failed to fetch orders. Please try again.');
+      console.error('Orders fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -187,20 +99,23 @@ export const useOrders = (): UseOrdersReturn => {
     setError(null);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await apiService.cancelOrder(orderId);
       
-      setOrders(prev => 
-        prev.map(order => 
-          order.id === orderId 
-            ? { ...order, status: 'cancelled' as const }
-            : order
-        )
-      );
-      
-      // Update current order if it was cancelled
-      if (currentOrder?.id === orderId) {
-        setCurrentOrder(null);
+      if (response.success) {
+        setOrders(prev => 
+          prev.map(order => 
+            order.id === orderId 
+              ? { ...order, status: 'cancelled' as const }
+              : order
+          )
+        );
+        
+        // Update current order if it was cancelled
+        if (currentOrder?.id === orderId) {
+          setCurrentOrder(null);
+        }
+      } else {
+        setError(response.error || 'Failed to cancel order');
       }
     } catch (err) {
       setError('Failed to cancel order. Please try again.');
@@ -216,9 +131,37 @@ export const useOrders = (): UseOrdersReturn => {
       throw new Error('Order not found');
     }
 
-    // Here you would typically add items to cart
-    // For now, just simulate the action
-    console.log('Reordering items from order:', orderId);
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Create new order with same items
+      const orderData = {
+        items: order.items.map(item => ({
+          foodItemId: item.foodItemId,
+          quantity: item.quantity,
+          specialInstructions: item.specialInstructions,
+        })),
+        restaurantId: order.restaurantId,
+        deliveryAddress: order.deliveryAddress,
+        paymentMethod: order.paymentMethod,
+        customerNotes: order.customerNotes,
+      };
+
+      const response = await apiService.createOrder(orderData);
+      
+      if (response.success) {
+        // Refresh orders to get the new order
+        await fetchOrders();
+      } else {
+        setError(response.error || 'Failed to reorder items');
+      }
+    } catch (err) {
+      setError('Failed to reorder items. Please try again.');
+      console.error('Reorder error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
+    Alert,
     FlatList,
     RefreshControl,
     StyleSheet,
@@ -11,26 +12,23 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, FONTS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
+import { FONTS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
+import { useColors, useTheme } from '../../contexts/ThemeContext';
 import { useAppDispatch, useAppSelector } from '../../store';
-import { addTestOrders, fetchOrderHistory } from '../../store/orderSlice';
+import { cancelOrder, fetchOrderHistory, reorderItems } from '../../store/orderSlice';
 import { Order, OrderStatus } from '../../types';
 
 const OrderHistoryScreen = () => {
   const router = useRouter();
   const dispatch = useAppDispatch();
+  const { theme } = useTheme();
+  const colors = useColors();
   const { orderHistory, isLoading, error } = useAppSelector((state) => state.order);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Debug logging
-  console.log('🏠 OrderHistory Screen - orderHistory length:', orderHistory?.length);
-  console.log('🏠 OrderHistory Screen - isLoading:', isLoading);
-  console.log('🏠 OrderHistory Screen - error:', error);
 
   // Fetch order history when screen is focused
   useFocusEffect(
     useCallback(() => {
-      console.log('🏠 Screen focused, fetching order history...');
       dispatch(fetchOrderHistory());
     }, [dispatch])
   );
@@ -44,21 +42,21 @@ const OrderHistoryScreen = () => {
   const getStatusColor = (status: OrderStatus): string => {
     switch (status) {
       case 'pending':
-        return COLORS.warning;
+        return colors.warning;
       case 'confirmed':
-        return COLORS.info;
+        return colors.info;
       case 'preparing':
-        return COLORS.primary;
+        return colors.primary;
       case 'ready':
-        return COLORS.success;
+        return colors.success;
       case 'on_the_way':
-        return COLORS.secondary;
+        return colors.secondary;
       case 'delivered':
-        return COLORS.success;
+        return colors.success;
       case 'cancelled':
-        return COLORS.error;
+        return colors.error;
       default:
-        return COLORS.gray[500];
+        return colors.border;
     }
   };
 
@@ -83,6 +81,55 @@ const OrderHistoryScreen = () => {
     }
   };
 
+  const handleViewDetails = (orderId: string) => {
+    router.push({
+      pathname: '/order-detail',
+      params: { id: orderId }
+    });
+  };
+
+  const handleReorder = async (orderId: string) => {
+    try {
+      await dispatch(reorderItems(orderId));
+      Alert.alert(
+        'Items Added to Cart',
+        'The items from this order have been added to your cart.',
+        [
+          { text: 'Continue Shopping', style: 'cancel' },
+          { text: 'View Cart', onPress: () => router.push('/(tabs)/cart') },
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to reorder items');
+    }
+  };
+
+  const handleCancelOrder = async (orderId: string) => {
+    Alert.alert(
+      'Cancel Order',
+      'Are you sure you want to cancel this order?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await dispatch(cancelOrder(orderId));
+              Alert.alert('Success', 'Order has been cancelled');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to cancel order');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const canCancelOrder = (status: OrderStatus): boolean => {
+    return ['pending', 'confirmed'].includes(status);
+  };
+
   const formatDate = (date: Date): string => {
     return new Intl.DateTimeFormat('en-US', {
       year: 'numeric',
@@ -95,17 +142,20 @@ const OrderHistoryScreen = () => {
 
   const renderOrderItem = ({ item }: { item: Order }) => (
     <TouchableOpacity
-      style={styles.orderCard}
-      onPress={() => {
-        // Navigate to order details
-        console.log('View order details:', item.id);
-      }}
+      style={[styles.orderCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+      onPress={() => handleViewDetails(item.id)}
     >
       <View style={styles.orderHeader}>
         <View style={styles.orderInfo}>
-          <Text style={styles.orderId}>Order #{item.id.substring(0, 8)}</Text>
-          <Text style={styles.restaurantName}>{item.restaurantName}</Text>
-          <Text style={styles.orderDate}>{formatDate(item.orderDate)}</Text>
+          <Text style={[styles.orderId, { color: colors.text.primary }]}>
+            Order #{item.id.substring(0, 8)}
+          </Text>
+          <Text style={[styles.restaurantName, { color: colors.text.secondary }]}>
+            {item.restaurantName}
+          </Text>
+          <Text style={[styles.orderDate, { color: colors.text.tertiary }]}>
+            {formatDate(item.orderDate)}
+          </Text>
         </View>
         
         <View style={styles.orderStatus}>
@@ -114,25 +164,43 @@ const OrderHistoryScreen = () => {
               {getStatusText(item.status)}
             </Text>
           </View>
-          <Text style={styles.orderTotal}>${item.grandTotal.toFixed(2)}</Text>
+          <Text style={[styles.orderTotal, { color: colors.text.primary }]}>
+            ${item.grandTotal.toFixed(2)}
+          </Text>
         </View>
       </View>
 
       <View style={styles.orderDetails}>
-        <Text style={styles.itemCount}>
+        <Text style={[styles.itemCount, { color: colors.text.secondary }]}>
           {item.items?.length || 0} {(item.items?.length || 0) === 1 ? 'item' : 'items'}
         </Text>
         
         <View style={styles.orderActions}>
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="receipt-outline" size={16} color={COLORS.primary} />
-            <Text style={styles.actionText}>Details</Text>
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: colors.background }]}
+            onPress={() => handleViewDetails(item.id)}
+          >
+            <Ionicons name="receipt-outline" size={16} color={colors.primary} />
+            <Text style={[styles.actionText, { color: colors.text.secondary }]}>Details</Text>
           </TouchableOpacity>
           
           {item.status === 'delivered' && (
-            <TouchableOpacity style={styles.actionButton}>
-              <Ionicons name="refresh-outline" size={16} color={COLORS.secondary} />
-              <Text style={styles.actionText}>Reorder</Text>
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: colors.background }]}
+              onPress={() => handleReorder(item.id)}
+            >
+              <Ionicons name="refresh-outline" size={16} color={colors.secondary} />
+              <Text style={[styles.actionText, { color: colors.text.secondary }]}>Reorder</Text>
+            </TouchableOpacity>
+          )}
+
+          {canCancelOrder(item.status) && (
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: colors.error + '20' }]}
+              onPress={() => handleCancelOrder(item.id)}
+            >
+              <Ionicons name="close-circle-outline" size={16} color={colors.error} />
+              <Text style={[styles.actionText, { color: colors.error }]}>Cancel</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -142,32 +210,17 @@ const OrderHistoryScreen = () => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Ionicons name="receipt-outline" size={64} color={COLORS.gray[400]} />
-      <Text style={styles.emptyTitle}>No Orders Yet</Text>
-      <Text style={styles.emptyText}>
+      <Ionicons name="receipt-outline" size={64} color={colors.border} />
+      <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>No Orders Yet</Text>
+      <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
         Start browsing and place your first order to see your order history here.
       </Text>
-      {/* Debug information */}
-      <Text style={{ fontSize: 12, color: COLORS.gray[600], marginTop: 10, textAlign: 'center' }}>
-        Debug: orderHistory length: {orderHistory?.length || 0}, isLoading: {isLoading.toString()}, error: {error || 'none'}
-      </Text>
-      <TouchableOpacity
-        style={{
-          backgroundColor: COLORS.primary,
-          padding: 10,
-          borderRadius: 5,
-          marginTop: 10,
-        }}
-        onPress={() => dispatch(addTestOrders())}
-      >
-        <Text style={{ color: 'white', textAlign: 'center' }}>Add Test Orders (Debug)</Text>
-      </TouchableOpacity>
       <TouchableOpacity
         style={styles.browseButton}
         onPress={() => router.push('/')}
       >
         <LinearGradient
-          colors={[COLORS.primary, COLORS.primaryDark]}
+          colors={[colors.primary, colors.primaryDark || colors.primary]}
           style={styles.browseGradient}
         >
           <Text style={styles.browseText}>Browse Menu</Text>
@@ -177,16 +230,16 @@ const OrderHistoryScreen = () => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text.primary} />
+          <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order History</Text>
+        <Text style={[styles.headerTitle, { color: colors.text.primary }]}>Order History</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -201,8 +254,8 @@ const OrderHistoryScreen = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[COLORS.primary]}
-            tintColor={COLORS.primary}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
         ListEmptyComponent={!isLoading ? renderEmptyState : null}
@@ -214,17 +267,14 @@ const OrderHistoryScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.base,
-    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING[4],
+    paddingVertical: SPACING[2],
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
-    backgroundColor: COLORS.white,
   },
   backButton: {
     width: 40,
@@ -232,32 +282,31 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.gray[100],
+    backgroundColor: '#F3F4F6',
   },
   headerTitle: {
     fontSize: FONTS.sizes.xl,
     fontWeight: 'bold',
-    color: COLORS.text.primary,
   },
   placeholder: {
     width: 40,
   },
   listContainer: {
-    padding: SPACING.base,
+    padding: SPACING[4],
     flexGrow: 1,
   },
   orderCard: {
-    backgroundColor: COLORS.white,
     borderRadius: RADIUS.lg,
-    padding: SPACING.base,
-    marginBottom: SPACING.base,
+    padding: SPACING[4],
+    marginBottom: SPACING[4],
+    borderWidth: 1,
     ...SHADOWS.md,
   },
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING[2],
   },
   orderInfo: {
     flex: 1,
@@ -265,26 +314,23 @@ const styles = StyleSheet.create({
   orderId: {
     fontSize: FONTS.sizes.lg,
     fontWeight: 'bold',
-    color: COLORS.text.primary,
     marginBottom: 2,
   },
   restaurantName: {
     fontSize: FONTS.sizes.base,
-    color: COLORS.text.secondary,
     marginBottom: 2,
   },
   orderDate: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.text.tertiary,
   },
   orderStatus: {
     alignItems: 'flex-end',
   },
   statusBadge: {
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING[2],
     paddingVertical: 4,
     borderRadius: RADIUS.sm,
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING[1],
   },
   statusText: {
     fontSize: FONTS.sizes.xs,
@@ -293,7 +339,6 @@ const styles = StyleSheet.create({
   orderTotal: {
     fontSize: FONTS.sizes.lg,
     fontWeight: 'bold',
-    color: COLORS.text.primary,
   },
   orderDetails: {
     flexDirection: 'row',
@@ -302,59 +347,54 @@ const styles = StyleSheet.create({
   },
   itemCount: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.text.secondary,
   },
   orderActions: {
     flexDirection: 'row',
-    gap: SPACING.sm,
+    gap: SPACING[2],
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING[2],
+    paddingVertical: SPACING[1],
     borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.gray[100],
   },
   actionText: {
     fontSize: FONTS.sizes.xs,
-    color: COLORS.text.secondary,
     fontWeight: '600',
   },
   emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: SPACING[6],
   },
   emptyTitle: {
     fontSize: FONTS.sizes['2xl'],
     fontWeight: 'bold',
-    color: COLORS.text.primary,
-    marginTop: SPACING.base,
-    marginBottom: SPACING.sm,
+    marginTop: SPACING[4],
+    marginBottom: SPACING[2],
   },
   emptyText: {
     fontSize: FONTS.sizes.base,
-    color: COLORS.text.secondary,
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: SPACING.xl,
+    marginBottom: SPACING[6],
   },
   browseButton: {
     width: 200,
   },
   browseGradient: {
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.base,
+    paddingHorizontal: SPACING[6],
+    paddingVertical: SPACING[4],
     borderRadius: RADIUS.lg,
     alignItems: 'center',
   },
   browseText: {
     fontSize: FONTS.sizes.base,
     fontWeight: 'bold',
-    color: COLORS.white,
+    color: '#FFFFFF',
   },
 });
 

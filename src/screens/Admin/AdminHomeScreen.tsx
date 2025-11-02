@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React from 'react';
 import {
     ScrollView,
@@ -11,24 +12,25 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, FONTS } from '../../constants/theme';
 
 interface AdminHomeScreenProps {
-  navigation: any;
+  navigation?: any; // Keep for backward compatibility
 }
 
 const AdminHomeScreen: React.FC<AdminHomeScreenProps> = ({ navigation }) => {
+  const router = useRouter();
   const adminActions = [
     {
       title: 'Add Category',
       description: 'Create a new food category',
       icon: 'list-circle',
       color: COLORS.secondary,
-      screen: 'AddCategory',
+      route: '/add-category',
     },
     {
       title: 'Add Food Item',
       description: 'Create a new food item',
       icon: 'restaurant',
       color: COLORS.primary,
-      screen: 'AddFood',
+      route: '/add-food',
     },
     {
       title: 'View Categories',
@@ -37,7 +39,7 @@ const AdminHomeScreen: React.FC<AdminHomeScreenProps> = ({ navigation }) => {
       color: COLORS.accent,
       onPress: async () => {
         // You can add navigation to a categories list screen here
-        navigation.navigate('Home');
+        router.push('/(tabs)');
       },
     },
     {
@@ -47,7 +49,7 @@ const AdminHomeScreen: React.FC<AdminHomeScreenProps> = ({ navigation }) => {
       color: COLORS.tertiary,
       onPress: async () => {
         // You can add navigation to a food items list screen here
-        navigation.navigate('Home');
+        router.push('/(tabs)');
       },
     },
   ];
@@ -55,8 +57,8 @@ const AdminHomeScreen: React.FC<AdminHomeScreenProps> = ({ navigation }) => {
   const handleActionPress = (action: typeof adminActions[0]) => {
     if (action.onPress) {
       action.onPress();
-    } else if (action.screen) {
-      navigation.navigate(action.screen);
+    } else if (action.route) {
+      router.push(action.route);
     }
   };
 
@@ -66,7 +68,7 @@ const AdminHomeScreen: React.FC<AdminHomeScreenProps> = ({ navigation }) => {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => router.back()}
         >
           <Ionicons name="arrow-back" size={24} color={COLORS.text.primary} />
         </TouchableOpacity>

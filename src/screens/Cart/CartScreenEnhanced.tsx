@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, FONTS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
+import { useAuth } from '../../hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '../../store';
 import { clearCart, removeFromCart, updateQuantity, updateSpecialInstructions } from '../../store/cartSlice';
 import { CartItem } from '../../types';
@@ -24,6 +25,7 @@ const CartScreen = () => {
   const { items, itemCount: totalItems, total: totalAmount, deliveryFee, tax, grandTotal } = useAppSelector(
     (state) => state.cart
   );
+  const { isAuthenticated } = useAuth();
   const [promoCode, setPromoCode] = useState('');
   const [promoDiscount, setPromoDiscount] = useState(0);
 
@@ -84,6 +86,20 @@ const CartScreen = () => {
       Alert.alert('Empty Cart', 'Please add some items to your cart before checkout.');
       return;
     }
+    
+    // Check if user is authenticated before checkout
+    if (!isAuthenticated) {
+      Alert.alert(
+        'Login Required',
+        'Please login to proceed with checkout.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Login', onPress: () => router.push('/login') }
+        ]
+      );
+      return;
+    }
+    
     router.push('/checkout');
   };
 
@@ -108,10 +124,16 @@ const CartScreen = () => {
               <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
               <Text style={styles.itemRestaurant} numberOfLines={1}>{item.restaurantName}</Text>
               <View style={styles.priceContainer}>
-                <Text style={styles.itemPrice}>${(item.price || 0).toFixed(2)}</Text>
-                {item.originalPrice && item.originalPrice > item.price && (
-                  <Text style={styles.originalPrice}>${(item.originalPrice || 0).toFixed(2)}</Text>
-                )}
+                <Text style={styles.itemPrice}>
+                  ${(typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0).toFixed(2)}
+                </Text>
+                {(() => {
+                  const price = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
+                  const origPrice = typeof item.originalPrice === 'number' ? item.originalPrice : parseFloat(item.originalPrice) || 0;
+                  return origPrice > 0 && origPrice > price && (
+                    <Text style={styles.originalPrice}>${origPrice.toFixed(2)}</Text>
+                  );
+                })()}
               </View>
             </View>
             
@@ -142,7 +164,9 @@ const CartScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.itemTotal}>${(item.totalPrice || 0).toFixed(2)}</Text>
+            <Text style={styles.itemTotal}>
+              ${(typeof item.totalPrice === 'number' ? item.totalPrice : parseFloat(item.totalPrice) || 0).toFixed(2)}
+            </Text>
           </View>
 
           {/* Special Instructions */}

@@ -11,6 +11,7 @@ interface ActionCardProps {
   color?: string;
   disabled?: boolean;
   rightIcon?: keyof typeof Ionicons.glyphMap;
+  rightComponent?: React.ReactNode;
 }
 
 const ActionCard: React.FC<ActionCardProps> = ({
@@ -21,6 +22,7 @@ const ActionCard: React.FC<ActionCardProps> = ({
   color = COLORS.primary,
   disabled = false,
   rightIcon = 'chevron-forward',
+  rightComponent,
 }) => {
   return (
     <TouchableOpacity
@@ -40,11 +42,13 @@ const ActionCard: React.FC<ActionCardProps> = ({
         </View>
         
         <View style={styles.rightContainer}>
-          <Ionicons 
-            name={rightIcon} 
-            size={20} 
-            color={COLORS.text.tertiary} 
-          />
+          {rightComponent || (
+            <Ionicons 
+              name={rightIcon} 
+              size={20} 
+              color={COLORS.text.tertiary} 
+            />
+          )}
         </View>
       </View>
     </TouchableOpacity>

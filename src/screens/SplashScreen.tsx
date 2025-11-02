@@ -28,17 +28,17 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete }) => {
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 1000,
-        useNativeDriver: true,
+        useNativeDriver: false, // Changed for Expo Go compatibility
       }),
       Animated.timing(scaleAnim, {
         toValue: 1,
         duration: 1000,
-        useNativeDriver: true,
+        useNativeDriver: false, // Changed for Expo Go compatibility
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: 800,
-        useNativeDriver: true,
+        useNativeDriver: false, // Changed for Expo Go compatibility
       }),
     ]).start();
 

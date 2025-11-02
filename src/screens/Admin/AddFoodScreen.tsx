@@ -1,8 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     Alert,
+    FlatList,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     ScrollView,
     StyleSheet,
@@ -18,18 +21,21 @@ import { COLORS, FONTS } from '../../constants/theme';
 import { apiService } from '../../services/apiService';
 
 interface AddFoodScreenProps {
-  navigation: any;
+  navigation?: any; // Keep for backward compatibility
 }
 
 const AddFoodScreen: React.FC<AddFoodScreenProps> = ({ navigation }) => {
+  const router = useRouter();
   const [categories, setCategories] = useState<any[]>([]);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     price: '',
     originalPrice: '',
     image: '',
-    category: '',
+    categoryId: '',
+    categoryName: '',
     restaurantId: '',
     restaurantName: '',
     ingredients: '',
@@ -48,14 +54,27 @@ const AddFoodScreen: React.FC<AddFoodScreenProps> = ({ navigation }) => {
     loadCategories();
   }, []);
 
+  // Reload categories when screen comes into focus (e.g., after adding a new category)
+  useFocusEffect(
+    useCallback(() => {
+      loadCategories();
+    }, [])
+  );
+
   const loadCategories = async () => {
     try {
       const response = await apiService.getCategories();
+      
       if (response.success && response.data) {
         setCategories(response.data);
+      } else {
+        setCategories([]);
       }
     } catch (error) {
-      console.error('Error loading categories:', error);
+      if (__DEV__) {
+        console.error('Error loading categories:', error);
+      }
+      setCategories([]);
     }
   };
 
@@ -83,7 +102,7 @@ const AddFoodScreen: React.FC<AddFoodScreenProps> = ({ navigation }) => {
       Alert.alert('Validation Error', 'Image URL is required');
       return false;
     }
-    if (!formData.category) {
+    if (!formData.categoryId) {
       Alert.alert('Validation Error', 'Please select a category');
       return false;
     }
@@ -113,14 +132,23 @@ const AddFoodScreen: React.FC<AddFoodScreenProps> = ({ navigation }) => {
         .map(item => item.trim())
         .filter(item => item.length > 0);
 
-      const foodData = {
+      // Generate a valid UUID v4 format for restaurantId if not provided
+      const generateUUID = () => {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          const r = Math.random() * 16 | 0;
+          const v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+      };
+
+      const foodData: any = {
         name: formData.name.trim(),
         description: formData.description.trim(),
         price: Number(formData.price),
         originalPrice: formData.originalPrice ? Number(formData.originalPrice) : undefined,
         image: formData.image.trim(),
-        category: formData.category,
-        restaurantId: formData.restaurantId.trim() || `restaurant-${Date.now()}`,
+        category: formData.categoryName, // Send category name only (API doesn't accept categoryId)
+        restaurantId: formData.restaurantId.trim() || generateUUID(),
         restaurantName: formData.restaurantName.trim(),
         ingredients: ingredientsArray,
         allergens: allergensArray.length > 0 ? allergensArray : undefined,
@@ -132,8 +160,18 @@ const AddFoodScreen: React.FC<AddFoodScreenProps> = ({ navigation }) => {
         isFeatured: formData.isFeatured,
         isPopular: formData.isPopular,
       };
+      
+      // Remove undefined values to avoid sending them in the request
+      Object.keys(foodData).forEach(key => {
+        if (foodData[key] === undefined) {
+          delete foodData[key];
+        }
+      });
 
-      console.log('🚀 Submitting food item:', foodData);
+      if (__DEV__) {
+        console.log('Sending food data:', JSON.stringify(foodData, null, 2));
+      }
+
       const response = await apiService.createFoodItem(foodData);
 
       if (response.success) {
@@ -151,7 +189,8 @@ const AddFoodScreen: React.FC<AddFoodScreenProps> = ({ navigation }) => {
                   price: '',
                   originalPrice: '',
                   image: '',
-                  category: '',
+                  categoryId: '',
+                  categoryName: '',
                   restaurantId: '',
                   restaurantName: '',
                   ingredients: '',
@@ -164,17 +203,26 @@ const AddFoodScreen: React.FC<AddFoodScreenProps> = ({ navigation }) => {
                   isFeatured: false,
                   isPopular: false,
                 });
-                navigation.goBack();
+                router.back();
               },
             },
           ]
         );
       } else {
-        Alert.alert('Error', response.error || 'Failed to create food item');
+        const errorMessage = response.error || 'Failed to create food item';
+        if (__DEV__) {
+          console.error('API Error Response:', response);
+        }
+        Alert.alert('Error', errorMessage);
       }
     } catch (error) {
-      console.error('Error creating food item:', error);
-      Alert.alert('Error', 'Failed to create food item. Please try again.');
+      if (__DEV__) {
+        console.error('Error creating food item:', error);
+      }
+      Alert.alert(
+        'Error', 
+        error instanceof Error ? error.message : 'Failed to create food item. Please try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -271,24 +319,33 @@ const AddFoodScreen: React.FC<AddFoodScreenProps> = ({ navigation }) => {
               <TouchableOpacity
                 style={styles.categorySelector}
                 onPress={() => {
-                  Alert.alert(
-                    'Select Category',
-                    'Choose a category for this food item',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      ...categories.map(category => ({
-                        text: `${category.icon || ''} ${category.name}`,
-                        onPress: () => handleInputChange('category', category.name)
-                      }))
-                    ]
-                  );
+                  if (categories.length === 0) {
+                    Alert.alert(
+                      'No Categories',
+                      'No categories available. Please add a category first.',
+                      [
+                        { text: 'OK' },
+                        { 
+                          text: 'Add Category', 
+                          onPress: () => router.push('/add-category')
+                        }
+                      ]
+                    );
+                    return;
+                  }
+                  setShowCategoryModal(true);
                 }}
               >
-                <Text style={[styles.categorySelectorText, formData.category ? styles.categorySelected : styles.categoryPlaceholder]}>
-                  {formData.category || 'Select a category'}
+                <Text style={[styles.categorySelectorText, formData.categoryName ? styles.categorySelected : styles.categoryPlaceholder]}>
+                  {formData.categoryName || 'Select a category'}
                 </Text>
                 <Ionicons name="chevron-down" size={20} color={COLORS.gray?.[500]} />
               </TouchableOpacity>
+              {categories.length > 0 && (
+                <Text style={styles.categoryHint}>
+                  {categories.length} categories available
+                </Text>
+              )}
             </View>
 
             {/* Restaurant Info */}
@@ -433,6 +490,55 @@ const AddFoodScreen: React.FC<AddFoodScreenProps> = ({ navigation }) => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Category Selection Modal */}
+      <Modal
+        visible={showCategoryModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowCategoryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Category</Text>
+              <TouchableOpacity
+                onPress={() => setShowCategoryModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color={COLORS.text.primary} />
+              </TouchableOpacity>
+            </View>
+            
+            <FlatList
+              data={categories}
+              keyExtractor={(item) => item.id || item._id || String(Math.random())}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.categoryItem}
+                  onPress={() => {
+                    handleInputChange('categoryId', item.id || item._id || '');
+                    handleInputChange('categoryName', item.name);
+                    setShowCategoryModal(false);
+                  }}
+                >
+                  <Text style={styles.categoryItemIcon}>{item.icon || '📂'}</Text>
+                  <View style={styles.categoryItemText}>
+                    <Text style={styles.categoryItemName}>{item.name}</Text>
+                    {item.description && (
+                      <Text style={styles.categoryItemDescription}>{item.description}</Text>
+                    )}
+                  </View>
+                  {formData.categoryId === (item.id || item._id) && (
+                    <Ionicons name="checkmark" size={20} color={COLORS.primary} />
+                  )}
+                </TouchableOpacity>
+              )}
+              style={styles.categoryList}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -522,6 +628,12 @@ const styles = StyleSheet.create({
   categoryPlaceholder: {
     color: COLORS.gray?.[400],
   },
+  categoryHint: {
+    fontSize: FONTS?.sizes?.sm || 12,
+    color: COLORS.gray?.[500],
+    marginTop: 4,
+    marginLeft: 4,
+  },
   switchGroup: {
     marginBottom: 20,
   },
@@ -558,6 +670,64 @@ const styles = StyleSheet.create({
     color: COLORS.gray?.[500],
     textAlign: 'center',
     marginTop: 16,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray?.[200],
+  },
+  modalTitle: {
+    fontSize: FONTS?.sizes?.lg || 18,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  categoryList: {
+    maxHeight: 400,
+  },
+  categoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray?.[100],
+  },
+  categoryItemIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  categoryItemText: {
+    flex: 1,
+  },
+  categoryItemName: {
+    fontSize: FONTS?.sizes?.base || 16,
+    fontWeight: '500',
+    color: COLORS.text.primary,
+  },
+  categoryItemDescription: {
+    fontSize: FONTS?.sizes?.sm || 14,
+    color: COLORS.gray?.[500],
+    marginTop: 2,
   },
 });
 

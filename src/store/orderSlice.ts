@@ -24,22 +24,14 @@ export const fetchOrderHistory = createAsyncThunk(
   'orders/fetchHistory',
   async (_, { rejectWithValue }) => {
     try {
-      console.log('📱 Fetching order history...');
-      
       const authHeader = await authService.getAuthHeader();
       if (!authHeader) {
-        console.log('❌ User not authenticated');
         return rejectWithValue('User not authenticated');
       }
-
-      console.log('🔑 Auth header:', authHeader);
-      console.log('📡 Making API call to /orders/history');
 
       const response = await apiService.get('/orders/history', {
         headers: authHeader
       });
-
-      console.log('📡 API Response:', response);
 
       if (response.success) {
         // Backend returns { orders: [], total, page, ... }
@@ -52,38 +44,10 @@ export const fetchOrderHistory = createAsyncThunk(
         return rejectWithValue(response.message || 'Failed to fetch order history');
       }
     } catch (error: any) {
-      console.error('📱 Fetch order history error:', error);
-      console.log('📱 API call failed, returning mock data for development');
-      
-      // Always return mock data in development for testing
-      const mockOrders = [
-        {
-          id: '1',
-          userId: 'user1',
-          restaurantId: 'restaurant1',
-          restaurantName: "Mario's Pizzeria",
-          items: [],
-          totalAmount: 25.99,
-          deliveryFee: 2.99,
-          tax: 2.60,
-          grandTotal: 31.58,
-          status: 'delivered' as OrderStatus,
-          orderDate: new Date('2025-10-14T10:30:00'),
-          estimatedDeliveryTime: new Date('2025-10-14T11:00:00'),
-          deliveryAddress: {
-            id: '1',
-            title: 'Home',
-            address: '123 Main Street',
-            latitude: 40.7128,
-            longitude: -74.0060,
-            isDefault: true
-          },
-          paymentMethod: 'Credit Card'
-        }
-      ];
-      
-      console.log('📱 Returning mock orders:', mockOrders);
-      return mockOrders;
+      if (__DEV__) {
+        console.error('Fetch order history error:', error);
+      }
+      return rejectWithValue(error.message || 'Failed to fetch order history');
     }
   }
 );
@@ -125,21 +89,20 @@ export const placeOrder = createAsyncThunk(
         promoDiscount: orderData.promoDiscount || 0
       };
 
-      console.log('📤 Placing order:', backendOrderData);
-      
       const response = await apiService.post('/orders', backendOrderData, {
         headers: authHeader
       });
 
       if (response.success || (response as any).order) {
         const orderResult = (response as any).order || response.data;
-        console.log('✅ Order placed successfully:', orderResult);
         return orderResult;
       } else {
         return rejectWithValue(response.message || 'Failed to place order');
       }
     } catch (error: any) {
-      console.error('Place order error:', error);
+      if (__DEV__) {
+        console.error('Place order error:', error);
+      }
       return rejectWithValue(error.message || 'Failed to place order');
     }
   }
@@ -243,6 +206,7 @@ const orderSlice = createSlice({
       if (orderToReorder) {
         // In a real app, this would add items back to cart and navigate to cart
         console.log('Reordering items from order:', orderToReorder.id);
+        // For now, just log the action - cart integration would be handled elsewhere
       }
     },
     markOrderAsDelivered: (state, action: PayloadAction<string>) => {
@@ -267,7 +231,6 @@ const orderSlice = createSlice({
       }
     },
     loadOrderHistory: (state) => {
-      // Mock loading order history - in real app would fetch from API
       state.isLoading = true;
     },
     loadOrderHistorySuccess: (state, action: PayloadAction<Order[]>) => {
@@ -281,36 +244,6 @@ const orderSlice = createSlice({
     },
     clearOrderError: (state) => {
       state.error = null;
-    },
-    addTestOrders: (state) => {
-      // Add some test orders for development
-      const testOrders = [
-        {
-          id: 'TEST_1',
-          userId: 'user1',
-          restaurantId: 'restaurant1',
-          restaurantName: "Mario's Pizzeria",
-          items: [],
-          totalAmount: 25.99,
-          deliveryFee: 2.99,
-          tax: 2.60,
-          grandTotal: 31.58,
-          status: 'delivered' as OrderStatus,
-          orderDate: new Date('2025-10-14T10:30:00'),
-          estimatedDeliveryTime: new Date('2025-10-14T11:00:00'),
-          deliveryAddress: {
-            id: '1',
-            title: 'Home',
-            address: '123 Main Street',
-            latitude: 40.7128,
-            longitude: -74.0060,
-            isDefault: true
-          },
-          paymentMethod: 'Credit Card'
-        }
-      ];
-      state.orderHistory = testOrders;
-      state.orders = testOrders;
     },
   },
   extraReducers: (builder) => {
@@ -363,7 +296,6 @@ export const {
   loadOrderHistorySuccess,
   loadOrderHistoryFailure,
   clearOrderError,
-  addTestOrders,
 } = orderSlice.actions;
 
 // Async thunk for creating order
@@ -371,18 +303,8 @@ export const createOrder = (orderData: CreateOrderPayload) => async (dispatch: a
   dispatch(createOrderStart());
   
   try {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
     // In a real app, this would make an API call to create the order
     dispatch(createOrderSuccess(orderData));
-    
-    // Start simulating order status updates
-    setTimeout(() => dispatch(updateOrderStatus({ 
-      orderId: 'ORD_' + Date.now().toString(), 
-      status: 'confirmed' 
-    })), 5000);
-    
   } catch (error) {
     dispatch(createOrderFailure('Failed to create order. Please try again.'));
   }

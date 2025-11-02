@@ -28,39 +28,10 @@ const OrderScreen: React.FC = () => {
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Mock address data
-  const addresses = [
-    {
-      id: '1',
-      title: 'Home',
-      address: '123 Main Street, Downtown, City 12345',
-      isDefault: true,
-    },
-    {
-      id: '2',
-      title: 'Work',
-      address: '456 Business Ave, Corporate District, City 67890',
-      isDefault: false,
-    },
-  ];
-
-  // Mock payment methods
-  const paymentMethods = [
-    {
-      id: '1',
-      type: 'card',
-      title: 'Credit Card',
-      subtitle: '**** **** **** 1234',
-      icon: 'card-outline',
-    },
-    {
-      id: '2',
-      type: 'cash',
-      title: 'Cash on Delivery',
-      subtitle: 'Pay when your order arrives',
-      icon: 'cash-outline',
-    },
-  ];
+  // Fetch addresses from API or user profile
+  const [addresses, setAddresses] = useState<any[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   const deliveryFee = 2.99;
   const tax = total * 0.1; // 10% tax
@@ -234,27 +205,43 @@ const OrderScreen: React.FC = () => {
         {/* Delivery Address */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Delivery Address</Text>
-          {addresses.map((address, index) => (
-            <AddressCard
-              key={address.id}
-              address={address}
-              index={index}
-              isSelected={selectedAddress === index}
-            />
-          ))}
+          {addresses.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="location-outline" size={48} color={COLORS.text.tertiary} />
+              <Text style={styles.emptyText}>No delivery address found</Text>
+              <Text style={styles.emptySubtext}>Please add a delivery address to continue</Text>
+            </View>
+          ) : (
+            addresses.map((address, index) => (
+              <AddressCard
+                key={address.id}
+                address={address}
+                index={index}
+                isSelected={selectedAddress === index}
+              />
+            ))
+          )}
         </View>
 
         {/* Payment Method */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment Method</Text>
-          {paymentMethods.map((payment, index) => (
-            <PaymentCard
-              key={payment.id}
-              payment={payment}
-              index={index}
-              isSelected={selectedPayment === index}
-            />
-          ))}
+          {paymentMethods.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="card-outline" size={48} color={COLORS.text.tertiary} />
+              <Text style={styles.emptyText}>No payment methods found</Text>
+              <Text style={styles.emptySubtext}>Please add a payment method to continue</Text>
+            </View>
+          ) : (
+            paymentMethods.map((payment, index) => (
+              <PaymentCard
+                key={payment.id}
+                payment={payment}
+                index={index}
+                isSelected={selectedPayment === index}
+              />
+            ))
+          )}
         </View>
 
         {/* Special Instructions */}
@@ -565,7 +552,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#666',
     marginTop: 20,
-    marginBottom: 30,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    marginBottom: 20,
   },
   continueShoppingButton: {
     backgroundColor: COLORS.primary,

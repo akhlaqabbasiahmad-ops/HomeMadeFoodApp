@@ -1,8 +1,6 @@
-import { ApiResponse } from '../types';
+import { ApiResponse, MealSuggestion } from '../types';
 
-const API_BASE_URL = __DEV__ 
-  ? 'http://192.168.1.6:3000/api/v1' 
-  : 'https://your-production-api.com/api/v1';
+const API_BASE_URL = 'http://16.170.206.245:3000/api/v1';
 
 class ApiService {
   private baseURL: string;
@@ -10,8 +8,6 @@ class ApiService {
 
   constructor() {
     this.baseURL = API_BASE_URL;
-    console.log('🔧 ApiService initialized with baseURL:', this.baseURL);
-    console.log('🔧 __DEV__ value:', __DEV__);
   }
 
   setAuthToken(token: string) {
@@ -28,18 +24,11 @@ class ApiService {
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseURL}${endpoint}`;
     
-    console.log('🚀 API REQUEST:', {
-      url,
-      method: options.method || 'GET',
-      timestamp: new Date().toISOString(),
-      baseURL: this.baseURL,
-      endpoint
-    });
-    
     const defaultHeaders: HeadersInit = {
       'Content-Type': 'application/json',
     };
 
+    // Add auth token if available
     if (this.authToken) {
       defaultHeaders.Authorization = `Bearer ${this.authToken}`;
     }
@@ -53,7 +42,19 @@ class ApiService {
     };
 
     try {
-      const response = await fetch(url, config);
+      // Add timeout to prevent hanging requests (10 seconds)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const response = await fetch(url, {
+        ...config,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Check if this is an optional endpoint that may not exist (404 is OK)
+      const isOptionalEndpoint = (url.includes('/restaurants') || url.includes('/addresses')) && response.status === 404;
       
       if (!response.ok) {
         let errorMessage = `HTTP error! status: ${response.status}`;
@@ -63,18 +64,48 @@ class ApiService {
         } catch {
           // If we can't parse the error response, use the default message
         }
+        
+        // For optional endpoints with 404, return gracefully instead of throwing
+        if (isOptionalEndpoint) {
+          // For addresses endpoint, return empty array instead of error
+          if (url.includes('/addresses')) {
+            return {
+              success: true,
+              data: [] as any,
+            };
+          }
+          return {
+            success: false,
+            data: {} as T,
+            error: errorMessage,
+          };
+        }
+        
         throw new Error(errorMessage);
       }
 
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('❌ API REQUEST FAILED:', {
-        url,
-        method: options.method || 'GET',
-        error: error instanceof Error ? error.message : 'Network error occurred',
-        timestamp: new Date().toISOString()
-      });
+      // Handle abort/timeout errors gracefully
+      if (error instanceof Error && error.name === 'AbortError') {
+        if (__DEV__) {
+          console.warn('API request timeout:', url);
+        }
+        return {
+          success: false,
+          data: {} as T,
+          error: 'Request timeout. Please check your connection.',
+        };
+      }
+      
+      if (__DEV__) {
+        console.error('API REQUEST FAILED:', {
+          url,
+          method: options.method || 'GET',
+          error: error instanceof Error ? error.message : 'Network error occurred',
+        });
+      }
       return {
         success: false,
         data: {} as T,
@@ -132,6 +163,44 @@ class ApiService {
     return this.request('/profile');
   }
 
+  // Address endpoints - using /users/{userId}/addresses format
+  // Authorization header is automatically added via this.authToken
+  async getAddresses(userId: string): Promise<ApiResponse<any[]>> {
+    return this.request(`/users/${userId}/addresses`);
+  }
+
+  async addAddress(userId: string, addressData: {
+    title: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    isDefault?: boolean;
+  }): Promise<ApiResponse<any>> {
+    return this.request(`/users/${userId}/addresses`, {
+      method: 'POST',
+      body: JSON.stringify(addressData),
+    });
+  }
+
+  async updateAddress(userId: string, id: string, addressData: Partial<{
+    title: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    isDefault: boolean;
+  }>): Promise<ApiResponse<any>> {
+    return this.request(`/users/${userId}/addresses/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(addressData),
+    });
+  }
+
+  async deleteAddress(userId: string, id: string): Promise<ApiResponse<any>> {
+    return this.request(`/users/${userId}/addresses/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Food endpoints
   async getFoodItems(params?: {
     query?: string;
@@ -142,6 +211,8 @@ class ApiService {
     maxPrice?: number;
     isVegetarian?: boolean;
     isVegan?: boolean;
+    featured?: boolean;
+    popular?: boolean;
   }): Promise<ApiResponse<{
     items: any[];
     total: number;
@@ -158,33 +229,10 @@ class ApiService {
       });
     }
 
-    // Use the working test endpoint for now
-    try {
-      const response = await this.request<any>('/test/food');
-      if (response.success && response.data) {
-        const data = response.data as any;
-        return {
-          success: true,
-          data: {
-            items: data.items || [],
-            total: data.total || 0,
-            page: params?.page || 1,
-            totalPages: Math.ceil((data.total || 0) / (params?.limit || 10))
-          }
-        };
-      }
-      return { 
-        success: false, 
-        error: 'No data received',
-        data: { items: [], total: 0, page: 1, totalPages: 0 }
-      };
-    } catch {
-      return { 
-        success: false, 
-        error: 'Failed to fetch food items',
-        data: { items: [], total: 0, page: 1, totalPages: 0 }
-      };
-    }
+    const queryString = searchParams.toString();
+    const endpoint = `/food${queryString ? `?${queryString}` : ''}`;
+    
+    return this.request(endpoint);
   }
 
   async getFoodItemById(id: string): Promise<ApiResponse<any>> {
@@ -192,18 +240,7 @@ class ApiService {
   }
 
   async getCategories(): Promise<ApiResponse<any[]>> {
-    try {
-      const response = await this.request<any>('/test/categories');
-      if (response.success && response.data) {
-        return {
-          success: true,
-          data: response.data || []
-        };
-      }
-      return { success: false, error: 'No categories found', data: [] };
-    } catch {
-      return { success: false, error: 'Failed to fetch categories', data: [] };
-    }
+    return this.request('/food/categories');
   }
 
   async getFeaturedItems(limit: number = 6): Promise<ApiResponse<any[]>> {
@@ -304,7 +341,7 @@ class ApiService {
     description?: string;
     icon?: string;
   }): Promise<ApiResponse<any>> {
-    return this.request('/test/categories', {
+    return this.request('/admin/categories', {
       method: 'POST',
       body: JSON.stringify(categoryData),
     });
@@ -316,7 +353,7 @@ class ApiService {
     price: number;
     originalPrice?: number;
     image: string;
-    category: string;
+    category: string; // Category name (API doesn't accept categoryId)
     restaurantId: string;
     restaurantName: string;
     ingredients: string[];
@@ -329,9 +366,45 @@ class ApiService {
     isFeatured?: boolean;
     isPopular?: boolean;
   }): Promise<ApiResponse<any>> {
-    return this.request('/test/food', {
+    return this.request('/admin/food', {
       method: 'POST',
       body: JSON.stringify(foodData),
+    });
+  }
+
+  // Get meal suggestion
+  async getMealSuggestion(): Promise<ApiResponse<MealSuggestion>> {
+    return this.request<MealSuggestion>('/meal-suggestions/suggest', {
+      method: 'GET',
+    });
+  }
+
+  // Get today's meal suggestion with preferences
+  async getTodayMealSuggestion(params?: {
+    dietaryRestrictions?: string[];
+    favoriteCategories?: string[];
+    maxPrice?: number;
+  }): Promise<ApiResponse<MealSuggestion>> {
+    // Build query string manually for React Native compatibility
+    const queryParts: string[] = [];
+    
+    if (params?.dietaryRestrictions && params.dietaryRestrictions.length > 0) {
+      queryParts.push(`dietaryRestrictions=${encodeURIComponent(params.dietaryRestrictions.join(','))}`);
+    }
+    
+    if (params?.favoriteCategories && params.favoriteCategories.length > 0) {
+      queryParts.push(`favoriteCategories=${encodeURIComponent(params.favoriteCategories.join(','))}`);
+    }
+    
+    if (params?.maxPrice !== undefined) {
+      queryParts.push(`maxPrice=${params.maxPrice}`);
+    }
+
+    const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+    const url = `/meal-suggestions/today${queryString}`;
+
+    return this.request<MealSuggestion>(url, {
+      method: 'GET',
     });
   }
 

@@ -6,10 +6,10 @@ export default function FoodDetailPage() {
   const router = useRouter();
   const params = useLocalSearchParams();
   
-  // Parse the food item from params
-  const foodItem = params.foodItem ? JSON.parse(params.foodItem as string) : null;
+  // Get the food item ID from params
+  const foodItemId = params.id as string;
   
-  if (!foodItem) {
+  if (!foodItemId) {
     router.back();
     return null;
   }

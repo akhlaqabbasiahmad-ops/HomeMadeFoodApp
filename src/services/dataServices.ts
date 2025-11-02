@@ -1,5 +1,5 @@
 import { ApiResponse, Category, FoodItem, PaginatedResponse, Restaurant } from '../types';
-import { mockCategories, mockFoodItems, mockRestaurants } from './mockData';
+import { apiService } from './apiService';
 
 class FoodService {
   // Get all food items with optional filters
@@ -11,47 +11,38 @@ class FoodService {
     limit?: number;
   }): Promise<ApiResponse<PaginatedResponse<FoodItem>>> {
     try {
-      // For now, return mock data
-      // In production, this would make an API call
-      let filteredItems = [...mockFoodItems];
+      const response = await apiService.getFoodItems({
+        query: params?.search,
+        category: params?.category,
+        page: params?.page || 1,
+        limit: params?.limit || 10,
+      });
 
-      if (params?.category) {
-        filteredItems = filteredItems.filter(item => 
-          item.category.toLowerCase() === params.category!.toLowerCase()
-        );
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: {
+            data: response.data.items || [],
+            currentPage: response.data.page || 1,
+            totalPages: response.data.totalPages || 1,
+            totalItems: response.data.total || 0,
+            hasNext: (response.data.page || 1) < (response.data.totalPages || 1),
+            hasPrevious: (response.data.page || 1) > 1,
+          },
+        };
       }
-
-      if (params?.restaurantId) {
-        filteredItems = filteredItems.filter(item => 
-          item.restaurantId === params.restaurantId
-        );
-      }
-
-      if (params?.search) {
-        const searchTerm = params.search.toLowerCase();
-        filteredItems = filteredItems.filter(item =>
-          item.name.toLowerCase().includes(searchTerm) ||
-          item.description.toLowerCase().includes(searchTerm) ||
-          item.restaurantName.toLowerCase().includes(searchTerm)
-        );
-      }
-
-      const page = params?.page || 1;
-      const limit = params?.limit || 10;
-      const startIndex = (page - 1) * limit;
-      const endIndex = startIndex + limit;
-      const paginatedItems = filteredItems.slice(startIndex, endIndex);
 
       return {
-        success: true,
+        success: false,
         data: {
-          data: paginatedItems,
-          currentPage: page,
-          totalPages: Math.ceil(filteredItems.length / limit),
-          totalItems: filteredItems.length,
-          hasNext: endIndex < filteredItems.length,
-          hasPrevious: page > 1,
+          data: [],
+          currentPage: 1,
+          totalPages: 0,
+          totalItems: 0,
+          hasNext: false,
+          hasPrevious: false,
         },
+        error: response.error || 'Failed to fetch food items',
       };
     } catch (error) {
       return {
@@ -72,19 +63,19 @@ class FoodService {
   // Get a single food item by ID
   async getFoodItemById(id: string): Promise<ApiResponse<FoodItem | null>> {
     try {
-      const foodItem = mockFoodItems.find(item => item.id === id);
+      const response = await apiService.getFoodItemById(id);
       
-      if (!foodItem) {
+      if (response.success && response.data) {
         return {
-          success: false,
-          data: null,
-          error: 'Food item not found',
+          success: true,
+          data: response.data,
         };
       }
 
       return {
-        success: true,
-        data: foodItem,
+        success: false,
+        data: null,
+        error: response.error || 'Food item not found',
       };
     } catch (error) {
       return {
@@ -98,14 +89,22 @@ class FoodService {
   // Get featured food items
   async getFeaturedFoodItems(limit: number = 6): Promise<ApiResponse<FoodItem[]>> {
     try {
-      // Return top-rated items as featured
-      const featuredItems = mockFoodItems
-        .sort((a, b) => b.rating - a.rating)
-        .slice(0, limit);
+      const response = await apiService.getFoodItems({
+        featured: true,
+        limit,
+      });
+
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data.items || [],
+        };
+      }
 
       return {
-        success: true,
-        data: featuredItems,
+        success: false,
+        data: [],
+        error: response.error || 'Failed to fetch featured items',
       };
     } catch (error) {
       return {
@@ -119,14 +118,22 @@ class FoodService {
   // Get popular food items
   async getPopularFoodItems(limit: number = 6): Promise<ApiResponse<FoodItem[]>> {
     try {
-      // Return items with most reviews as popular
-      const popularItems = mockFoodItems
-        .sort((a, b) => b.reviews - a.reviews)
-        .slice(0, limit);
+      const response = await apiService.getFoodItems({
+        popular: true,
+        limit,
+      });
+
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data.items || [],
+        };
+      }
 
       return {
-        success: true,
-        data: popularItems,
+        success: false,
+        data: [],
+        error: response.error || 'Failed to fetch popular items',
       };
     } catch (error) {
       return {
@@ -142,9 +149,19 @@ class CategoryService {
   // Get all categories
   async getCategories(): Promise<ApiResponse<Category[]>> {
     try {
+      const response = await apiService.getCategories();
+      
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data,
+        };
+      }
+
       return {
-        success: true,
-        data: mockCategories,
+        success: false,
+        data: [],
+        error: response.error || 'Failed to fetch categories',
       };
     } catch (error) {
       return {
@@ -158,19 +175,19 @@ class CategoryService {
   // Get category by ID
   async getCategoryById(id: string): Promise<ApiResponse<Category | null>> {
     try {
-      const category = mockCategories.find(cat => cat.id === id);
+      const response = await apiService.getCategoryById(id);
       
-      if (!category) {
+      if (response.success && response.data) {
         return {
-          success: false,
-          data: null,
-          error: 'Category not found',
+          success: true,
+          data: response.data,
         };
       }
 
       return {
-        success: true,
-        data: category,
+        success: false,
+        data: null,
+        error: response.error || 'Category not found',
       };
     } catch (error) {
       return {
@@ -193,47 +210,54 @@ class RestaurantService {
     limit?: number;
   }): Promise<ApiResponse<PaginatedResponse<Restaurant>>> {
     try {
-      let filteredRestaurants = [...mockRestaurants];
+      const response = await apiService.getRestaurants({
+        search: params?.search,
+        page: params?.page || 1,
+        limit: params?.limit || 10,
+      });
 
-      if (params?.cuisine && params.cuisine.length > 0) {
-        filteredRestaurants = filteredRestaurants.filter(restaurant =>
-          params.cuisine!.some(cuisine => 
-            restaurant.categories.includes(cuisine)
-          )
-        );
+      if (response.success && response.data) {
+        let filteredRestaurants = response.data.items || [];
+
+        // Apply client-side filters
+        if (params?.cuisine && params.cuisine.length > 0) {
+          filteredRestaurants = filteredRestaurants.filter(restaurant =>
+            params.cuisine!.some(cuisine => 
+              restaurant.categories.includes(cuisine)
+            )
+          );
+        }
+
+        if (params?.minRating) {
+          filteredRestaurants = filteredRestaurants.filter(restaurant =>
+            restaurant.rating >= params.minRating!
+          );
+        }
+
+        return {
+          success: true,
+          data: {
+            data: filteredRestaurants,
+            currentPage: response.data.page || 1,
+            totalPages: response.data.totalPages || 1,
+            totalItems: response.data.total || 0,
+            hasNext: (response.data.page || 1) < (response.data.totalPages || 1),
+            hasPrevious: (response.data.page || 1) > 1,
+          },
+        };
       }
-
-      if (params?.minRating) {
-        filteredRestaurants = filteredRestaurants.filter(restaurant =>
-          restaurant.rating >= params.minRating!
-        );
-      }
-
-      if (params?.search) {
-        const searchTerm = params.search.toLowerCase();
-        filteredRestaurants = filteredRestaurants.filter(restaurant =>
-          restaurant.name.toLowerCase().includes(searchTerm) ||
-          restaurant.description.toLowerCase().includes(searchTerm) ||
-          restaurant.categories.some(cat => cat.toLowerCase().includes(searchTerm))
-        );
-      }
-
-      const page = params?.page || 1;
-      const limit = params?.limit || 10;
-      const startIndex = (page - 1) * limit;
-      const endIndex = startIndex + limit;
-      const paginatedRestaurants = filteredRestaurants.slice(startIndex, endIndex);
 
       return {
-        success: true,
+        success: false,
         data: {
-          data: paginatedRestaurants,
-          currentPage: page,
-          totalPages: Math.ceil(filteredRestaurants.length / limit),
-          totalItems: filteredRestaurants.length,
-          hasNext: endIndex < filteredRestaurants.length,
-          hasPrevious: page > 1,
+          data: [],
+          currentPage: 1,
+          totalPages: 0,
+          totalItems: 0,
+          hasNext: false,
+          hasPrevious: false,
         },
+        error: response.error || 'Failed to fetch restaurants',
       };
     } catch (error) {
       return {
@@ -254,19 +278,19 @@ class RestaurantService {
   // Get restaurant by ID
   async getRestaurantById(id: string): Promise<ApiResponse<Restaurant | null>> {
     try {
-      const restaurant = mockRestaurants.find(rest => rest.id === id);
+      const response = await apiService.getRestaurantById(id);
       
-      if (!restaurant) {
+      if (response.success && response.data) {
         return {
-          success: false,
-          data: null,
-          error: 'Restaurant not found',
+          success: true,
+          data: response.data,
         };
       }
 
       return {
-        success: true,
-        data: restaurant,
+        success: false,
+        data: null,
+        error: response.error || 'Restaurant not found',
       };
     } catch (error) {
       return {
@@ -280,13 +304,22 @@ class RestaurantService {
   // Get featured restaurants
   async getFeaturedRestaurants(limit: number = 6): Promise<ApiResponse<Restaurant[]>> {
     try {
-      const featuredRestaurants = mockRestaurants
-        .sort((a, b) => b.rating - a.rating)
-        .slice(0, limit);
+      const response = await apiService.getRestaurants({
+        featured: true,
+        limit,
+      });
+
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data.items || [],
+        };
+      }
 
       return {
-        success: true,
-        data: featuredRestaurants,
+        success: false,
+        data: [],
+        error: response.error || 'Failed to fetch featured restaurants',
       };
     } catch (error) {
       return {

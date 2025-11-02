@@ -96,7 +96,17 @@ class AuthService {
     }
   }
 
-  // Decode token to get user info
+  // Initialize auth state on app start
+  async initializeAuth(): Promise<void> {
+    try {
+      const token = await this.getToken();
+      if (token && this.isTokenValid(token)) {
+        apiService.setAuthToken(token);
+      }
+    } catch (error) {
+      console.error('Error initializing auth:', error);
+    }
+  }
   decodeToken(token: string): DecodedToken | null {
     try {
       return jwtDecode<DecodedToken>(token);
@@ -109,8 +119,6 @@ class AuthService {
   // Login user with real backend API
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
-      console.log('🔐 Attempting login with:', credentials.email);
-      
       const response = await apiService.post('/auth/login', credentials);
       
       // Handle backend response - it returns data directly
@@ -141,6 +149,9 @@ class AuthService {
         await this.storeToken(accessToken);
         await this.storeUser(user);
         
+        // Set token in apiService for immediate use
+        apiService.setAuthToken(accessToken);
+        
         return {
           success: true,
           token: accessToken,
@@ -165,8 +176,6 @@ class AuthService {
   // Register user with real backend API
   async register(registerData: RegisterData): Promise<AuthResponse> {
     try {
-      console.log('📝 Attempting registration for:', registerData.email);
-      
       const response = await apiService.post('/auth/register', registerData);
       
       // Handle backend response - it returns data directly
@@ -196,6 +205,9 @@ class AuthService {
       if (this.isTokenValid(accessToken)) {
         await this.storeToken(accessToken);
         await this.storeUser(user);
+        
+        // Set token in apiService for immediate use
+        apiService.setAuthToken(accessToken);
         
         return {
           success: true,
@@ -229,12 +241,15 @@ class AuthService {
             headers: { Authorization: `Bearer ${token}` }
           });
         } catch (error) {
-          console.log('Logout API call failed, but continuing with local logout');
+          // API call failed, but continuing with local logout
         }
       }
       
       // Clear local storage
       await this.removeToken();
+      
+      // Clear token from apiService
+      apiService.removeAuthToken();
     } catch (error) {
       console.error('Logout error:', error);
       // Still clear local storage even if API call fails
@@ -242,7 +257,7 @@ class AuthService {
     }
   }
 
-  // Check authentication status
+  // Check authentication status (non-blocking, fast local check)
   async checkAuthStatus(): Promise<{ isAuthenticated: boolean; user: any | null }> {
     try {
       const token = await this.getToken();
@@ -253,9 +268,13 @@ class AuthService {
       }
 
       const user = await this.getStoredUser();
+      // Don't make API calls here - just check local storage
       return { isAuthenticated: true, user };
     } catch (error) {
-      console.error('Auth status check error:', error);
+      if (__DEV__) {
+        console.error('Auth status check error:', error);
+      }
+      // Always return a result, never throw
       return { isAuthenticated: false, user: null };
     }
   }

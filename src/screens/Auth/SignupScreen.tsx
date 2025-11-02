@@ -187,12 +187,8 @@ const SignupScreen = () => {
                 rules={{
                   required: 'Password is required',
                   minLength: {
-                    value: 8,
-                    message: 'Password must be at least 8 characters',
-                  },
-                  pattern: {
-                    value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-                    message: 'Password must contain uppercase, lowercase, and number',
+                    value: 1,
+                    message: 'Password must be at least 1 character',
                   },
                 }}
                 render={({ field: { onChange, onBlur, value } }) => (
@@ -200,7 +196,7 @@ const SignupScreen = () => {
                     <Ionicons name="lock-closed-outline" size={20} color={COLORS.gray[500]} style={styles.inputIcon} />
                     <TextInput
                       style={[styles.input, errors.password && styles.inputError]}
-                      placeholder="Create a strong password"
+                      placeholder="Create your password"
                       placeholderTextColor={COLORS.gray[400]}
                       secureTextEntry
                       onBlur={onBlur}

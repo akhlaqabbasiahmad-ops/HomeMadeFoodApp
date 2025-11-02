@@ -1,108 +1,73 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  FlatList,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Animated,
+    Dimensions,
+    FlatList,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import FoodCard from '../../components/Food/FoodCard';
-import { COLORS, FONTS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
+import EmptyState from '../../components/common/EmptyState';
+import { FONTS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
+import { useColors, useTheme } from '../../contexts/ThemeContext';
 import { apiService } from '../../services/apiService';
 import { useAppSelector } from '../../store';
 import { Category, FoodItem, Restaurant } from '../../types';
 
 const { width } = Dimensions.get('window');
 
-// Mock data - in real app, this would come from API
-const mockCategories: Category[] = [
-  { id: '1', name: 'Pizza', image: 'https://images.unsplash.com/photo-1565298507278-760aac2d3d0a', icon: 'pizza' },
-  { id: '2', name: 'Burgers', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd', icon: 'fast-food' },
-  { id: '3', name: 'Sushi', image: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c', icon: 'fish' },
-  { id: '4', name: 'Desserts', image: 'https://images.unsplash.com/photo-1551024506-0bccd828d307', icon: 'ice-cream' },
-  { id: '5', name: 'Salads', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd', icon: 'leaf' },
-];
-
-const mockFoodItems: FoodItem[] = [
-  {
-    id: '1',
-    name: 'Margherita Pizza',
-    description: 'Classic Italian pizza with fresh mozzarella, tomato sauce, and basil',
-    image: 'https://images.unsplash.com/photo-1565298507278-760aac2d3d0a',
-    price: 12.99,
-    originalPrice: 15.99,
-    rating: 4.8,
-    reviews: 124,
-    category: 'Pizza',
-    restaurantId: '1',
-    restaurantName: "Mario's Pizzeria",
-    ingredients: ['Mozzarella', 'Tomato Sauce', 'Basil', 'Olive Oil'],
-    allergens: ['Gluten', 'Dairy'],
-    isVegetarian: true,
-    isVegan: false,
-    isSpicy: false,
-    preparationTime: 15,
-    calories: 280,
-  },
-  {
-    id: '2',
-    name: 'Beef Burger Deluxe',
-    description: 'Juicy beef patty with lettuce, tomato, cheese, and special sauce',
-    image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd',
-    price: 14.50,
-    rating: 4.6,
-    reviews: 89,
-    category: 'Burgers',
-    restaurantId: '2',
-    restaurantName: 'Burger House',
-    ingredients: ['Beef Patty', 'Lettuce', 'Tomato', 'Cheese', 'Special Sauce'],
-    allergens: ['Gluten', 'Dairy'],
-    isVegetarian: false,
-    isVegan: false,
-    isSpicy: false,
-    preparationTime: 12,
-    calories: 520,
-  },
-];
-
-const mockRestaurants: Restaurant[] = [
-  {
-    id: '1',
-    name: "Mario's Pizzeria",
-    description: 'Authentic Italian cuisine',
-    image: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b',
-    rating: 4.8,
-    reviews: 256,
-    deliveryTime: '25-35 min',
-    deliveryFee: 2.99,
-    minimumOrder: 15,
-    categories: ['Pizza', 'Italian'],
-    isOpen: true,
-    distance: 1.2,
-    coordinates: { latitude: 40.7128, longitude: -74.0060 },
-  },
-];
+// No mock data - all data comes from API
 
 const HomeScreen = () => {
   const router = useRouter();
+  const { theme, toggleTheme } = useTheme();
+  const colors = useColors();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const user = useAppSelector((state) => state.auth.user);
   
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  
   // API data state
-  const [foodItems, setFoodItems] = useState<FoodItem[]>(mockFoodItems); // Start with mock as fallback
-  const [categories, setCategories] = useState<Category[]>(mockCategories); // Start with mock as fallback
+  const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Animate on mount
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   // Fetch data from API
   useEffect(() => {
@@ -111,50 +76,69 @@ const HomeScreen = () => {
       setError(null);
       
       try {
-        console.log('🔄 Starting API data fetch...');
-        
         // Fetch food items
-        console.log('📡 Fetching food items from API...');
         const foodResponse = await apiService.getFoodItems();
-        console.log('🍔 Food API Response:', {
-          success: foodResponse.success,
-          itemCount: foodResponse.data?.items?.length || 0,
-          error: foodResponse.error
-        });
-        
-        if (foodResponse.success && foodResponse.data.items && foodResponse.data.items.length > 0) {
-          console.log('✅ Successfully loaded food items from API:', foodResponse.data.items.length);
-          setFoodItems(foodResponse.data.items);
+        if (foodResponse.success && foodResponse.data?.items) {
+          // Normalize food items to ensure all required fields exist
+          const normalizedItems: FoodItem[] = foodResponse.data.items.map((item: any) => ({
+            id: item.id || item._id || '',
+            name: item.name || 'Unnamed Item',
+            description: item.description || '',
+            image: item.image || item.imageUrl || '',
+            price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || parseFloat(item.amount) || 0,
+            originalPrice: item.originalPrice ? (typeof item.originalPrice === 'number' ? item.originalPrice : parseFloat(item.originalPrice)) : undefined,
+            rating: typeof item.rating === 'number' ? item.rating : parseFloat(item.rating) || 0,
+            reviews: typeof item.reviews === 'number' ? item.reviews : parseInt(item.reviews) || 0,
+            category: item.category || item.categoryName || 'Other',
+            restaurantId: item.restaurantId || item.restaurant?.id || '',
+            restaurantName: item.restaurantName || item.restaurant?.name || '',
+            ingredients: item.ingredients || [],
+            allergens: item.allergens || [],
+            isVegetarian: item.isVegetarian || false,
+            isVegan: item.isVegan || false,
+            isSpicy: item.isSpicy || false,
+            preparationTime: typeof item.preparationTime === 'number' ? item.preparationTime : parseInt(item.preparationTime) || 0,
+            calories: item.calories ? (typeof item.calories === 'number' ? item.calories : parseInt(item.calories)) : undefined,
+          }));
+          setFoodItems(normalizedItems);
         } else {
-          console.log('⚠️ API returned no food items, using mock data');
-          console.log('API failed, using mock data:', foodResponse.error || 'No data received');
+          setFoodItems([]);
         }
         
         // Fetch categories
-        console.log('📡 Fetching categories from API...');
         const categoriesResponse = await apiService.getCategories();
-        console.log('📂 Categories API Response:', {
-          success: categoriesResponse.success,
-          categoryCount: categoriesResponse.data?.length || 0,
-          error: categoriesResponse.error
-        });
-        
-        if (categoriesResponse.success && categoriesResponse.data && categoriesResponse.data.length > 0) {
-          console.log('✅ Successfully loaded categories from API:', categoriesResponse.data.length);
-          // Map the API category format to our expected format
+        if (categoriesResponse.success && categoriesResponse.data) {
           const mappedCategories: Category[] = categoriesResponse.data.map((cat: any) => ({
             id: cat.id,
             name: cat.name,
-            image: `https://images.unsplash.com/photo-1565298507278-760aac2d3d0a?w=300&h=200&fit=crop`, // Fallback image
+            image: cat.image || `https://images.unsplash.com/photo-1565298507278-760aac2d3d0a?w=300&h=200&fit=crop`,
             icon: cat.icon || 'restaurant',
           }));
           setCategories(mappedCategories);
         } else {
-          console.log('⚠️ API returned no categories, using mock data');
+          setCategories([]);
+        }
+
+        // Fetch restaurants (endpoint may not exist, handle gracefully)
+        try {
+          const restaurantsResponse = await apiService.getRestaurants();
+          if (restaurantsResponse.success && restaurantsResponse.data?.items) {
+            setRestaurants(restaurantsResponse.data.items);
+          } else {
+            setRestaurants([]);
+          }
+        } catch (restaurantError) {
+          // Restaurants endpoint may not exist, just set empty array
+          setRestaurants([]);
         }
       } catch (err) {
-        console.error('❌ Error fetching data from API:', err);
-        setError('Failed to load data. Using cached data.');
+        if (__DEV__) {
+          console.error('Error fetching data from API:', err);
+        }
+        setError('Failed to load data. Please try again.');
+        setFoodItems([]);
+        setCategories([]);
+        setRestaurants([]);
       } finally {
         setIsLoading(false);
       }
@@ -165,7 +149,6 @@ const HomeScreen = () => {
 
   // Handle search input changes
   const handleSearchChange = (text: string) => {
-    console.log('Search query changed:', text);
     setSearchQuery(text);
   };
 
@@ -183,137 +166,221 @@ const HomeScreen = () => {
     return matchesSearch && matchesCategory;
   });
 
-  // Log filtered results for debugging
-  console.log(`Search: "${searchQuery}", Category: ${selectedCategory}, Results: ${filteredFoodItems.length}/${foodItems.length}`);
+  const CategoryCard = ({ category, index }: { category: Category; index: number }) => {
+    const cardAnim = useRef(new Animated.Value(0)).current;
+    
+    useEffect(() => {
+      Animated.timing(cardAnim, {
+        toValue: 1,
+        duration: 400,
+        delay: index * 100,
+        useNativeDriver: true,
+      }).start();
+    }, []);
 
-  const CategoryCard = ({ category }: { category: Category }) => (
-    <TouchableOpacity
-      style={[
-        styles.categoryCard,
-        selectedCategory === category.id && styles.categoryCardActive,
-      ]}
-      onPress={() => setSelectedCategory(
-        selectedCategory === category.id ? null : category.id
-      )}
-    >
-      <LinearGradient
-        colors={
-          selectedCategory === category.id
-            ? [COLORS.primary, COLORS.primaryLight]
-            : [COLORS.gray[100], COLORS.gray[50]]
-        }
-        style={styles.categoryCardGradient}
+    return (
+      <Animated.View
+        style={[
+          styles.categoryCard,
+          {
+            opacity: cardAnim,
+            transform: [
+              {
+                translateY: cardAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [30, 0],
+                }),
+              },
+            ],
+          },
+        ]}
       >
-        <Ionicons
-          name={category.icon as any}
-          size={24}
-          color={selectedCategory === category.id ? COLORS.white : COLORS.primary}
-        />
-        <Text
+        <TouchableOpacity
           style={[
-            styles.categoryText,
-            selectedCategory === category.id && styles.categoryTextActive,
+            styles.categoryCardInner,
+            selectedCategory === category.id && styles.categoryCardActive,
           ]}
+          onPress={() => setSelectedCategory(
+            selectedCategory === category.id ? null : category.id
+          )}
+          activeOpacity={0.8}
         >
-          {category.name}
-        </Text>
-      </LinearGradient>
-    </TouchableOpacity>
-  );
+          <LinearGradient
+            colors={
+              selectedCategory === category.id
+                ? [colors.primary, colors.primaryLight]
+                : [colors.surface, colors.surfaceSecondary]
+            }
+            style={styles.categoryCardGradient}
+          >
+            <View style={styles.categoryIconContainer}>
+              <Ionicons
+                name={category.icon as any}
+                size={28}
+                color={selectedCategory === category.id ? colors.white : colors.primary}
+              />
+            </View>
+            <Text
+              style={[
+                styles.categoryText,
+                { color: selectedCategory === category.id ? colors.white : colors.text.primary },
+                selectedCategory === category.id && styles.categoryTextActive,
+              ]}
+            >
+              {category.name}
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
 
   const RestaurantCard = ({ restaurant }: { restaurant: Restaurant }) => (
-    <TouchableOpacity style={styles.restaurantCard}>
-      <View style={styles.restaurantImageContainer}>
-        <View style={styles.restaurantImagePlaceholder}>
-          <Ionicons name="restaurant" size={32} color={COLORS.gray[400]} />
+    <Animated.View
+      style={[
+        styles.restaurantCard,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+        },
+      ]}
+    >
+      <TouchableOpacity style={styles.restaurantCardInner} activeOpacity={0.9}>
+        <View style={styles.restaurantImageContainer}>
+          <View style={[styles.restaurantImagePlaceholder, { backgroundColor: colors.surfaceSecondary }]}>
+            <Ionicons name="restaurant" size={32} color={colors.text.tertiary} />
+          </View>
+          <View style={[styles.restaurantStatus, { backgroundColor: colors.white }]}>
+            <View style={[
+              styles.statusIndicator,
+              { backgroundColor: restaurant.isOpen ? colors.success : colors.error }
+            ]} />
+            <Text style={[styles.statusText, { color: colors.text.primary }]}>
+              {restaurant.isOpen ? 'Open' : 'Closed'}
+            </Text>
+          </View>
         </View>
-        <View style={styles.restaurantStatus}>
-          <View style={[
-            styles.statusIndicator,
-            { backgroundColor: restaurant.isOpen ? COLORS.success : COLORS.error }
-          ]} />
-          <Text style={styles.statusText}>
-            {restaurant.isOpen ? 'Open' : 'Closed'}
-          </Text>
-        </View>
-      </View>
-      
-      <View style={styles.restaurantContent}>
-        <Text style={styles.restaurantName} numberOfLines={1}>
-          {restaurant.name}
-        </Text>
-        <Text style={styles.restaurantDescription} numberOfLines={1}>
-          {restaurant.description}
-        </Text>
         
-        <View style={styles.restaurantInfo}>
-          <View style={styles.ratingContainer}>
-            <Ionicons name="star" size={14} color={COLORS.rating} />
-            <Text style={styles.ratingText}>{restaurant.rating}</Text>
-          </View>
+        <View style={styles.restaurantContent}>
+          <Text style={[styles.restaurantName, { color: colors.text.primary }]} numberOfLines={1}>
+            {restaurant.name}
+          </Text>
+          <Text style={[styles.restaurantDescription, { color: colors.text.secondary }]} numberOfLines={1}>
+            {restaurant.description}
+          </Text>
           
-          <View style={styles.deliveryInfo}>
-            <Ionicons name="time-outline" size={14} color={COLORS.gray[500]} />
-            <Text style={styles.deliveryText}>{restaurant.deliveryTime}</Text>
-          </View>
-          
-          <View style={styles.deliveryInfo}>
-            <Ionicons name="bicycle-outline" size={14} color={COLORS.gray[500]} />
-            <Text style={styles.deliveryText}>${restaurant.deliveryFee}</Text>
+          <View style={styles.restaurantInfo}>
+            <View style={styles.ratingContainer}>
+              <Ionicons name="star" size={14} color={colors.rating} />
+              <Text style={[styles.ratingText, { color: colors.text.primary }]}>{restaurant.rating}</Text>
+            </View>
+            
+            <View style={styles.deliveryInfo}>
+              <Ionicons name="time-outline" size={14} color={colors.text.tertiary} />
+              <Text style={[styles.deliveryText, { color: colors.text.secondary }]}>{restaurant.deliveryTime}</Text>
+            </View>
+            
+            <View style={styles.deliveryInfo}>
+              <Ionicons name="bicycle-outline" size={14} color={colors.text.tertiary} />
+              <Text style={[styles.deliveryText, { color: colors.text.secondary }]}>${restaurant.deliveryFee}</Text>
+            </View>
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </Animated.View>
   );
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning!';
+    if (hour < 17) return 'Good Afternoon!';
+    return 'Good Evening!';
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar 
+        barStyle="light-content"
+        backgroundColor={colors.primary}
+        translucent={false}
+      />
       
       {/* Loading Overlay */}
       {isLoading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading fresh food data...</Text>
+        <View style={[styles.loadingOverlay, { backgroundColor: colors.overlayLight }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text.primary }]}>Loading fresh food data...</Text>
         </View>
       )}
       
       {/* Error Message */}
       {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
+        <Animated.View 
+          style={[
+            styles.errorContainer, 
+            { 
+              backgroundColor: colors.errorSoft,
+              borderLeftColor: colors.error,
+            },
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+        </Animated.View>
       )}
 
-      {/* Debug Info - Temporary */}
-      <View style={styles.debugContainer}>
-        <Text style={styles.debugText}>
-          📊 Data: {foodItems.length} foods, {categories.length} categories | 
-          🔗 API: {(apiService as any).baseURL?.includes('192.168') ? 'Network IP' : 'localhost'} | 
-          🌐 Mode: {__DEV__ ? 'DEV' : 'PROD'}
-        </Text>
-      </View>
-      
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <Animated.ScrollView 
+        showsVerticalScrollIndicator={false}
+        style={[
+          styles.scrollView,
+          {
+            opacity: fadeAnim,
+            transform: [
+              { translateY: slideAnim },
+              { scale: scaleAnim },
+            ],
+          },
+        ]}
+      >
         {/* Header */}
         <LinearGradient
-          colors={[COLORS.primary, COLORS.primaryLight]}
+          colors={[colors.primary, colors.secondary]}
           style={styles.header}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
         >
           <View style={styles.headerTop}>
             <View>
-              <Text style={styles.welcomeText}>Good Morning!</Text>
+              <Text style={styles.welcomeText}>{getGreeting()}</Text>
               <Text style={styles.userNameText}>
                 {user?.name || 'Food Lover'}
               </Text>
             </View>
             
             <View style={styles.headerActions}>
-              <TouchableOpacity style={styles.headerButton}>
-                <Ionicons name="notifications-outline" size={24} color={COLORS.white} />
+              <TouchableOpacity 
+                style={styles.headerButton}
+                onPress={toggleTheme}
+                activeOpacity={0.8}
+              >
+                <Ionicons 
+                  name={theme.isDark ? 'sunny-outline' : 'moon-outline'} 
+                  size={24} 
+                  color={colors.white} 
+                />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.headerButton}>
-                <Ionicons name="person-circle-outline" size={28} color={COLORS.white} />
+              <TouchableOpacity style={styles.headerButton} activeOpacity={0.8}>
+                <Ionicons name="notifications-outline" size={24} color={colors.white} />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.headerButton}
+                onPress={() => router.push('/(tabs)/profile')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="person-circle-outline" size={28} color={colors.white} />
               </TouchableOpacity>
             </View>
           </View>
@@ -322,41 +389,57 @@ const HomeScreen = () => {
         </LinearGradient>
 
         {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBar}>
-            <Ionicons name="search-outline" size={20} color={COLORS.gray[500]} />
+        <Animated.View 
+          style={[
+            styles.searchContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Ionicons name="search-outline" size={20} color={colors.text.tertiary} />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, { color: colors.text.primary }]}
               placeholder="Search for food, restaurants..."
-              placeholderTextColor={COLORS.gray[400]}
+              placeholderTextColor={colors.text.tertiary}
               value={searchQuery}
               onChangeText={handleSearchChange}
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => handleSearchChange('')}>
-                <Ionicons name="close-circle" size={20} color={COLORS.gray[500]} />
+              <TouchableOpacity onPress={() => handleSearchChange('')} activeOpacity={0.7}>
+                <Ionicons name="close-circle" size={20} color={colors.text.tertiary} />
               </TouchableOpacity>
             )}
           </View>
           
-          <TouchableOpacity style={styles.filterButton}>
+          <TouchableOpacity style={styles.filterButton} activeOpacity={0.8}>
             <LinearGradient
-              colors={[COLORS.primary, COLORS.primaryDark]}
+              colors={[colors.primary, colors.primaryDark]}
               style={styles.filterButtonGradient}
             >
-              <Ionicons name="options-outline" size={20} color={COLORS.white} />
+              <Ionicons name="options-outline" size={20} color={colors.white} />
             </LinearGradient>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* Pre-Order Notice */}
-        <View style={styles.noticeContainer}>
+        <Animated.View 
+          style={[
+            styles.noticeContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
           <LinearGradient
-            colors={[COLORS.accent, COLORS.accentDark]}
+            colors={[colors.accent, colors.accentDark]}
             style={styles.noticeGradient}
           >
             <View style={styles.noticeIconContainer}>
-              <Ionicons name="time-outline" size={24} color={COLORS.white} />
+              <Ionicons name="time-outline" size={24} color={colors.white} />
             </View>
             <View style={styles.noticeContent}>
               <Text style={styles.noticeTitle}>Pre-Order Required</Text>
@@ -366,68 +449,103 @@ const HomeScreen = () => {
               </Text>
             </View>
           </LinearGradient>
-        </View>
+        </Animated.View>
 
         {/* Categories */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Categories</Text>
-          <FlatList
-            data={categories}
-            renderItem={({ item }) => <CategoryCard category={item} />}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesList}
-          />
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Categories</Text>
+          {categories.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="grid-outline" size={48} color={colors.text.tertiary} />
+              <Text style={[styles.emptyText, { color: colors.text.secondary }]}>No categories found</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={categories}
+              renderItem={({ item, index }) => <CategoryCard category={item} index={index} />}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoriesList}
+            />
+          )}
         </View>
 
         {/* Featured Food */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Featured Food</Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Featured Food</Text>
+            {filteredFoodItems.length > 0 && (
+              <TouchableOpacity activeOpacity={0.7}>
+                <Text style={[styles.seeAllText, { color: colors.primary }]}>See All</Text>
+              </TouchableOpacity>
+            )}
           </View>
           
-          <FlatList
-            data={filteredFoodItems}
-            renderItem={({ item }) => (
-              <View style={styles.foodCardContainer}>
-                <FoodCard
-                  foodItem={item}
-                  onPress={() => router.push({
-                    pathname: '/food-detail',
-                    params: { foodItem: JSON.stringify(item) }
-                  })}
-                  onAddToCart={() => console.log('Add to cart:', item.name)}
-                  onToggleFavorite={() => console.log('Toggle favorite:', item.name)}
-                  showQuantitySelector={true}
-                  isFavorite={false} // In real app, get from favorites state
-                />
-              </View>
-            )}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.foodList}
-          />
+          {filteredFoodItems.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="fast-food-outline" size={48} color={colors.text.tertiary} />
+              <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
+                {searchQuery || selectedCategory ? 'No products found' : 'No products available'}
+              </Text>
+              <Text style={[styles.emptySubtext, { color: colors.text.tertiary }]}>
+                {searchQuery || selectedCategory 
+                  ? 'Try adjusting your search or filters' 
+                  : 'Check back later for new items'}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredFoodItems}
+              renderItem={({ item }) => (
+                <Animated.View 
+                  style={styles.foodCardContainer}
+                  entering={Animated.spring}
+                >
+                  <FoodCard
+                    foodItem={item}
+                    onPress={() => router.push({
+                      pathname: '/food-detail',
+                      params: { id: item.id }
+                    })}
+                    onAddToCart={() => console.log('Add to cart:', item.name)}
+                    onToggleFavorite={() => console.log('Toggle favorite:', item.name)}
+                    showQuantitySelector={true}
+                    isFavorite={false}
+                  />
+                </Animated.View>
+              )}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.foodList}
+            />
+          )}
         </View>
 
         {/* Nearby Restaurants */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Nearby Restaurants</Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Nearby Restaurants</Text>
+            {restaurants.length > 0 && (
+              <TouchableOpacity activeOpacity={0.7}>
+                <Text style={[styles.seeAllText, { color: colors.primary }]}>See All</Text>
+              </TouchableOpacity>
+            )}
           </View>
           
-          {mockRestaurants.map((restaurant) => (
-            <RestaurantCard key={restaurant.id} restaurant={restaurant} />
-          ))}
+          {restaurants.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="restaurant-outline" size={48} color={colors.text.tertiary} />
+              <Text style={[styles.emptyText, { color: colors.text.secondary }]}>No restaurants found</Text>
+            </View>
+          ) : (
+            restaurants.map((restaurant) => (
+              <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+            ))
+          )}
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 };
@@ -435,46 +553,57 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+  },
+  scrollView: {
+    flex: 1,
   },
   header: {
-    paddingHorizontal: SPACING.base,
-    paddingTop: SPACING.base,
-    paddingBottom: SPACING.xl,
+    paddingHorizontal: SPACING[4],
+    paddingTop: SPACING[2],
+    paddingBottom: SPACING[6],
+    ...SHADOWS.lg,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: SPACING.base,
+    marginBottom: SPACING[4],
+    paddingTop: SPACING[2],
   },
   welcomeText: {
-    fontSize: FONTS.sizes.base,
-    color: COLORS.white,
-    opacity: 0.9,
+    fontSize: FONTS.sizes.sm,
+    color: '#FFFFFF',
+    opacity: 0.8,
+    fontWeight: '400',
   },
   userNameText: {
-    fontSize: FONTS.sizes.xl,
-    fontWeight: 'bold',
-    color: COLORS.white,
-    marginTop: 2,
+    fontSize: FONTS.sizes['2xl'],
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: SPACING[1],
+    letterSpacing: 0.5,
   },
   headerActions: {
     flexDirection: 'row',
-    gap: SPACING.sm,
+    gap: SPACING[2],
   },
   headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: RADIUS.full,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+    ...SHADOWS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   headerSubtitle: {
-    fontSize: FONTS.sizes.base,
-    color: COLORS.white,
+    fontSize: FONTS.sizes.lg,
+    color: '#FFFFFF',
+    fontWeight: '500',
     opacity: 0.9,
+    lineHeight: 24,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -487,17 +616,16 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
     borderRadius: RADIUS.xl,
     paddingHorizontal: SPACING.base,
     height: 50,
+    borderWidth: 1,
     ...SHADOWS.base,
     gap: SPACING.sm,
   },
   searchInput: {
     flex: 1,
     fontSize: FONTS.sizes.base,
-    color: COLORS.text.primary,
   },
   filterButton: {
     borderRadius: RADIUS.xl,
@@ -523,11 +651,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: FONTS.sizes.xl,
     fontWeight: 'bold',
-    color: COLORS.text.primary,
   },
   seeAllText: {
     fontSize: FONTS.sizes.base,
-    color: COLORS.primary,
     fontWeight: '600',
   },
   categoriesList: {
@@ -539,6 +665,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...SHADOWS.sm,
   },
+  categoryCardInner: {
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+  },
   categoryCardActive: {
     ...SHADOWS.base,
   },
@@ -549,13 +679,21 @@ const styles = StyleSheet.create({
     minWidth: 80,
     gap: 4,
   },
+  categoryIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
   categoryText: {
     fontSize: FONTS.sizes.xs,
     fontWeight: '600',
-    color: COLORS.text.primary,
   },
   categoryTextActive: {
-    color: COLORS.white,
+    color: '#FFFFFF',
   },
   foodList: {
     paddingHorizontal: SPACING.base,
@@ -565,13 +703,15 @@ const styles = StyleSheet.create({
     width: width * 0.75,
   },
   restaurantCard: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.white,
     borderRadius: RADIUS.lg,
     marginHorizontal: SPACING.base,
     marginBottom: SPACING.sm,
+    borderWidth: 1,
     ...SHADOWS.sm,
     overflow: 'hidden',
+  },
+  restaurantCardInner: {
+    flexDirection: 'row',
   },
   restaurantImageContainer: {
     position: 'relative',
@@ -581,7 +721,6 @@ const styles = StyleSheet.create({
   restaurantImagePlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: COLORS.gray[100],
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -591,7 +730,6 @@ const styles = StyleSheet.create({
     left: SPACING.xs,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: RADIUS.xs,
@@ -605,7 +743,6 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 10,
     fontWeight: '600',
-    color: COLORS.text.primary,
   },
   restaurantContent: {
     flex: 1,
@@ -615,12 +752,10 @@ const styles = StyleSheet.create({
   restaurantName: {
     fontSize: FONTS.sizes.base,
     fontWeight: 'bold',
-    color: COLORS.text.primary,
     marginBottom: 2,
   },
   restaurantDescription: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.text.secondary,
     marginBottom: SPACING.xs,
   },
   restaurantInfo: {
@@ -636,7 +771,6 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: FONTS.sizes.xs,
     fontWeight: '600',
-    color: COLORS.text.primary,
   },
   deliveryInfo: {
     flexDirection: 'row',
@@ -645,7 +779,6 @@ const styles = StyleSheet.create({
   },
   deliveryText: {
     fontSize: FONTS.sizes.xs,
-    color: COLORS.text.secondary,
   },
   noticeContainer: {
     marginHorizontal: SPACING.base,
@@ -674,12 +807,12 @@ const styles = StyleSheet.create({
   noticeTitle: {
     fontSize: FONTS.sizes.base,
     fontWeight: 'bold',
-    color: COLORS.white,
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   noticeText: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.white,
+    color: '#FFFFFF',
     opacity: 0.9,
     lineHeight: 20,
   },
@@ -689,7 +822,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
@@ -697,36 +829,34 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: FONTS.sizes.base,
-    color: COLORS.primary,
     fontWeight: '500',
   },
   errorContainer: {
-    backgroundColor: COLORS.error + '20',
     margin: 16,
     padding: 12,
     borderRadius: 8,
     borderLeftWidth: 4,
-    borderLeftColor: COLORS.error,
   },
   errorText: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.error,
     fontWeight: '500',
   },
-  debugContainer: {
-    marginHorizontal: 16,
-    marginTop: 8,
-    padding: 12,
-    backgroundColor: '#e3f2fd',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#42a5f5',
+  emptyContainer: {
+    paddingVertical: SPACING.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.base,
   },
-  debugText: {
-    color: '#1565c0',
-    fontSize: 11,
+  emptyText: {
+    fontSize: FONTS.sizes.base,
+    fontWeight: '600',
+    marginTop: SPACING.sm,
     textAlign: 'center',
-    fontFamily: 'monospace',
+  },
+  emptySubtext: {
+    fontSize: FONTS.sizes.sm,
+    marginTop: SPACING.xs,
+    textAlign: 'center',
   },
 });
 

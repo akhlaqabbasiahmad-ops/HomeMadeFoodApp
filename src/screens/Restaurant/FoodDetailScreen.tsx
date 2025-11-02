@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     Dimensions,
     Image,
     ScrollView,
@@ -14,80 +15,110 @@ import {
     View,
 } from 'react-native';
 import CustomButton from '../../components/common/CustomButton';
-import { COLORS, FONTS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
+import { FONTS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
+import { useColors, useTheme } from '../../contexts/ThemeContext';
+import { apiService } from '../../services/apiService';
 import { useAppDispatch } from '../../store';
 import { addToCart } from '../../store/cartSlice';
 import { FoodItem } from '../../types';
 
 const { height } = Dimensions.get('window');
 
-// Mock food item data
-const mockFoodItem: FoodItem = {
-  id: '1',
-  name: 'Margherita Pizza',
-  description: 'A classic Italian pizza featuring fresh mozzarella cheese, ripe tomatoes, fresh basil leaves, and a drizzle of olive oil on a thin, crispy crust. Our dough is made fresh daily using traditional Italian methods.',
-  image: 'https://images.unsplash.com/photo-1565298507278-760aac2d3d0a',
-  price: 12.99,
-  originalPrice: 15.99,
-  rating: 4.8,
-  reviews: 124,
-  category: 'Pizza',
-  restaurantId: '1',
-  restaurantName: "Mario's Pizzeria",
-  ingredients: ['Fresh Mozzarella', 'San Marzano Tomatoes', 'Fresh Basil', 'Extra Virgin Olive Oil', 'Italian Flour', 'Sea Salt'],
-  allergens: ['Gluten', 'Dairy'],
-  isVegetarian: true,
-  isVegan: false,
-  isSpicy: false,
-  preparationTime: 15,
-  calories: 280,
-};
-
-const mockReviews = [
-  {
-    id: '1',
-    userName: 'John Doe',
-    rating: 5,
-    comment: 'Amazing pizza! The crust was perfect and the ingredients were so fresh.',
-    date: '2 days ago',
-  },
-  {
-    id: '2',
-    userName: 'Sarah Smith',
-    rating: 4,
-    comment: 'Great taste, but took a bit longer than expected. Still worth it!',
-    date: '1 week ago',
-  },
-];
-
 const FoodDetailScreen = () => {
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const dispatch = useAppDispatch();
+  const { theme } = useTheme();
+  const colors = useColors();
+  
+  const [foodItem, setFoodItem] = useState<FoodItem | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [isFavorite, setIsFavorite] = useState(false);
-  const [selectedSize, setSelectedSize] = useState('Medium');
   const [specialInstructions, setSpecialInstructions] = useState('');
 
-  const sizes = [
-    { name: 'Small', price: 9.99 },
-    { name: 'Medium', price: 12.99 },
-    { name: 'Large', price: 15.99 },
-  ];
+  // Fetch food item data from API
+  useEffect(() => {
+    const fetchFoodItem = async () => {
+      if (!id) {
+        setError('Food item ID is required');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const response = await apiService.getFoodItemById(id);
+        
+        if (response.success && response.data) {
+          setFoodItem(response.data);
+        } else {
+          setError(response.error || 'Failed to load food item');
+        }
+      } catch (err) {
+        console.error('Error fetching food item:', err);
+        setError('Failed to load food item. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFoodItem();
+  }, [id]);
 
   const handleAddToCart = () => {
+    if (!foodItem) return;
+
     dispatch(addToCart({
-      foodItem: {
-        ...mockFoodItem,
-        price: sizes.find(size => size.name === selectedSize)?.price || mockFoodItem.price,
-      },
+      foodItem,
       quantity,
       specialInstructions,
     }));
     
-    // Show success feedback and go back - user can use cart tab to view items
-    // TODO: Add toast/alert for success feedback
     router.back();
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar backgroundColor="transparent" barStyle="light-content" translucent />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text.primary }]}>
+            Loading food details...
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (error || !foodItem) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar backgroundColor="transparent" barStyle="light-content" translucent />
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={64} color={colors.error} />
+          <Text style={[styles.errorTitle, { color: colors.text.primary }]}>
+            Oops! Something went wrong
+          </Text>
+          <Text style={[styles.errorMessage, { color: colors.text.secondary }]}>
+            {error || 'Food item not found'}
+          </Text>
+          <TouchableOpacity 
+            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            onPress={() => router.back()}
+          >
+            <Text style={[styles.retryButtonText, { color: colors.white }]}>
+              Go Back
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   const renderRating = () => (
     <View style={styles.ratingContainer}>
@@ -97,130 +128,86 @@ const FoodDetailScreen = () => {
             key={star}
             name="star"
             size={16}
-            color={star <= Math.floor(mockFoodItem.rating) ? COLORS.rating : COLORS.gray[300]}
+            color={star <= Math.floor(foodItem.rating || 0) ? colors.rating : colors.border}
           />
         ))}
       </View>
-      <Text style={styles.ratingText}>{mockFoodItem.rating}</Text>
-      <Text style={styles.reviewsText}>({mockFoodItem.reviews} reviews)</Text>
+      <Text style={[styles.ratingText, { color: colors.text.primary }]}>
+        {foodItem.rating || 0}
+      </Text>
+      <Text style={[styles.reviewsText, { color: colors.text.secondary }]}>
+        ({foodItem.reviews || 0} reviews)
+      </Text>
     </View>
   );
 
   const renderBadges = () => (
     <View style={styles.badgesContainer}>
-      {mockFoodItem.isVegetarian && (
-        <View style={[styles.badge, styles.vegetarianBadge]}>
-          <Ionicons name="leaf" size={12} color={COLORS.white} />
+      {foodItem.isVegetarian && (
+        <View style={[styles.badge, { backgroundColor: colors.success }]}>
+          <Ionicons name="leaf" size={12} color={colors.white} />
           <Text style={styles.badgeText}>Vegetarian</Text>
         </View>
       )}
-      {mockFoodItem.calories && (
-        <View style={[styles.badge, styles.calorieBadge]}>
-          <Ionicons name="fitness" size={12} color={COLORS.white} />
-          <Text style={styles.badgeText}>{mockFoodItem.calories} cal</Text>
+      {foodItem.isVegan && (
+        <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
+          <Ionicons name="leaf" size={12} color={colors.white} />
+          <Text style={styles.badgeText}>Vegan</Text>
         </View>
       )}
-      <View style={[styles.badge, styles.timeBadge]}>
-        <Ionicons name="time" size={12} color={COLORS.white} />
-        <Text style={styles.badgeText}>{mockFoodItem.preparationTime} min</Text>
+      {foodItem.isSpicy && (
+        <View style={[styles.badge, { backgroundColor: colors.error }]}>
+          <Ionicons name="flame" size={12} color={colors.white} />
+          <Text style={styles.badgeText}>Spicy</Text>
+        </View>
+      )}
+      {foodItem.calories && (
+        <View style={[styles.badge, { backgroundColor: colors.info }]}>
+          <Ionicons name="fitness" size={12} color={colors.white} />
+          <Text style={styles.badgeText}>{foodItem.calories} cal</Text>
+        </View>
+      )}
+      <View style={[styles.badge, { backgroundColor: colors.warning }]}>
+        <Ionicons name="time" size={12} color={colors.white} />
+        <Text style={styles.badgeText}>{foodItem.preparationTime} min</Text>
       </View>
     </View>
   );
 
-  const SizeSelector = () => (
-    <View style={styles.sizeSelector}>
-      <Text style={styles.sectionTitle}>Size</Text>
-      <View style={styles.sizeOptions}>
-        {sizes.map((size) => (
-          <TouchableOpacity
-            key={size.name}
-            style={[
-              styles.sizeOption,
-              selectedSize === size.name && styles.sizeOptionActive,
-            ]}
-            onPress={() => setSelectedSize(size.name)}
-          >
-            <Text
-              style={[
-                styles.sizeOptionText,
-                selectedSize === size.name && styles.sizeOptionTextActive,
-              ]}
-            >
-              {size.name}
-            </Text>
-            <Text
-              style={[
-                styles.sizeOptionPrice,
-                selectedSize === size.name && styles.sizeOptionPriceActive,
-              ]}
-            >
-              ${size.price}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
 
   const QuantitySelector = () => (
     <View style={styles.quantitySelector}>
-      <Text style={styles.sectionTitle}>Quantity</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Quantity</Text>
       <View style={styles.quantityControls}>
         <TouchableOpacity
           style={[styles.quantityButton, quantity <= 1 && styles.quantityButtonDisabled]}
           onPress={() => setQuantity(Math.max(1, quantity - 1))}
           disabled={quantity <= 1}
         >
-          <Ionicons name="remove" size={20} color={quantity <= 1 ? COLORS.gray[400] : COLORS.primary} />
+          <Ionicons name="remove" size={20} color={quantity <= 1 ? colors.border : colors.primary} />
         </TouchableOpacity>
         
-        <Text style={styles.quantityText}>{quantity}</Text>
+        <Text style={[styles.quantityText, { color: colors.text.primary }]}>{quantity}</Text>
         
         <TouchableOpacity
           style={styles.quantityButton}
           onPress={() => setQuantity(quantity + 1)}
         >
-          <Ionicons name="add" size={20} color={COLORS.primary} />
+          <Ionicons name="add" size={20} color={colors.primary} />
         </TouchableOpacity>
       </View>
     </View>
   );
 
-  const ReviewItem = ({ review }: { review: any }) => (
-    <View style={styles.reviewItem}>
-      <View style={styles.reviewHeader}>
-        <View style={styles.reviewUserInfo}>
-          <View style={styles.reviewAvatar}>
-            <Ionicons name="person" size={20} color={COLORS.gray[500]} />
-          </View>
-          <View>
-            <Text style={styles.reviewUserName}>{review.userName}</Text>
-            <Text style={styles.reviewDate}>{review.date}</Text>
-          </View>
-        </View>
-        <View style={styles.reviewRating}>
-          {[1, 2, 3, 4, 5].map((star) => (
-            <Ionicons
-              key={star}
-              name="star"
-              size={12}
-              color={star <= review.rating ? COLORS.rating : COLORS.gray[300]}
-            />
-          ))}
-        </View>
-      </View>
-      <Text style={styles.reviewComment}>{review.comment}</Text>
-    </View>
-  );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar backgroundColor="transparent" barStyle="light-content" translucent />
       
       {/* Header Image */}
       <View style={styles.headerContainer}>
         <Image
-          source={{ uri: mockFoodItem.image }}
+          source={{ uri: foodItem.image }}
           style={styles.headerImage}
           resizeMode="cover"
         />
@@ -237,7 +224,7 @@ const FoodDetailScreen = () => {
             style={styles.headerButton}
             onPress={() => router.back()}
           >
-            <Ionicons name="chevron-back" size={24} color={COLORS.white} />
+            <Ionicons name="chevron-back" size={24} color={colors.white} />
           </TouchableOpacity>
           
           <TouchableOpacity 
@@ -247,7 +234,7 @@ const FoodDetailScreen = () => {
             <Ionicons 
               name={isFavorite ? 'heart' : 'heart-outline'} 
               size={22} 
-              color={isFavorite ? COLORS.error : COLORS.white} 
+              color={isFavorite ? colors.error : colors.white} 
             />
           </TouchableOpacity>
         </View>
@@ -261,49 +248,50 @@ const FoodDetailScreen = () => {
         <View style={styles.foodInfo}>
           <View style={styles.foodHeader}>
             <View style={styles.foodTitleContainer}>
-              <Text style={styles.foodName}>{mockFoodItem.name}</Text>
-              <Text style={styles.restaurantName}>{mockFoodItem.restaurantName}</Text>
+              <Text style={[styles.foodName, { color: colors.text.primary }]}>{foodItem.name}</Text>
+              <Text style={[styles.restaurantName, { color: colors.text.secondary }]}>{foodItem.restaurantName}</Text>
             </View>
             
             <View style={styles.priceContainer}>
-              <Text style={styles.price}>
-                ${sizes.find(size => size.name === selectedSize)?.price || mockFoodItem.price}
+              <Text style={[styles.price, { color: colors.primary }]}>
+                ${foodItem.price}
               </Text>
-              {mockFoodItem.originalPrice && (
-                <Text style={styles.originalPrice}>${mockFoodItem.originalPrice}</Text>
+              {foodItem.originalPrice && (
+                <Text style={[styles.originalPrice, { color: colors.text.secondary }]}>
+                  ${foodItem.originalPrice}
+                </Text>
               )}
             </View>
           </View>
 
           {renderRating()}
           
-          <Text style={styles.description}>{mockFoodItem.description}</Text>
+          <Text style={[styles.description, { color: colors.text.secondary }]}>{foodItem.description}</Text>
         </View>
-
-        {/* Size Selection */}
-        <SizeSelector />
 
         {/* Ingredients */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Ingredients</Text>
-          <View style={styles.ingredientsList}>
-            {mockFoodItem.ingredients.map((ingredient, index) => (
-              <View key={index} style={styles.ingredientItem}>
-                <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
-                <Text style={styles.ingredientText}>{ingredient}</Text>
-              </View>
-            ))}
+        {foodItem.ingredients && foodItem.ingredients.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Ingredients</Text>
+            <View style={styles.ingredientsList}>
+              {foodItem.ingredients.map((ingredient, index) => (
+                <View key={index} style={styles.ingredientItem}>
+                  <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+                  <Text style={[styles.ingredientText, { color: colors.text.primary }]}>{ingredient}</Text>
+                </View>
+              ))}
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Allergens */}
-        {mockFoodItem.allergens.length > 0 && (
+        {foodItem.allergens && foodItem.allergens.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Allergen Information</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Allergen Information</Text>
             <View style={styles.allergensList}>
-              {mockFoodItem.allergens.map((allergen, index) => (
-                <View key={index} style={styles.allergenItem}>
-                  <Text style={styles.allergenText}>{allergen}</Text>
+              {foodItem.allergens.map((allergen, index) => (
+                <View key={index} style={[styles.allergenItem, { backgroundColor: colors.error + '20' }]}>
+                  <Text style={[styles.allergenText, { color: colors.error }]}>{allergen}</Text>
                 </View>
               ))}
             </View>
@@ -315,11 +303,15 @@ const FoodDetailScreen = () => {
 
         {/* Special Instructions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Special Instructions</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Special Instructions</Text>
           <TextInput
-            style={styles.instructionsInput}
+            style={[styles.instructionsInput, { 
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              color: colors.text.primary
+            }]}
             placeholder="Any special requests? (e.g., extra cheese, no onions, etc.)"
-            placeholderTextColor={COLORS.gray[400]}
+            placeholderTextColor={colors.text.tertiary}
             value={specialInstructions}
             onChangeText={setSpecialInstructions}
             multiline
@@ -327,28 +319,14 @@ const FoodDetailScreen = () => {
             textAlignVertical="top"
           />
         </View>
-
-        {/* Reviews */}
-        <View style={styles.section}>
-          <View style={styles.reviewsHeader}>
-            <Text style={styles.sectionTitle}>Reviews</Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
-          </View>
-          
-          {mockReviews.slice(0, 2).map((review) => (
-            <ReviewItem key={review.id} review={review} />
-          ))}
-        </View>
       </ScrollView>
 
       {/* Add to Cart Button */}
-      <View style={styles.bottomContainer}>
+      <View style={[styles.bottomContainer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
         <View style={styles.totalContainer}>
-          <Text style={styles.totalLabel}>Total</Text>
-          <Text style={styles.totalPrice}>
-            ${((sizes.find(size => size.name === selectedSize)?.price || mockFoodItem.price) * quantity).toFixed(2)}
+          <Text style={[styles.totalLabel, { color: colors.text.primary }]}>Total</Text>
+          <Text style={[styles.totalPrice, { color: colors.primary }]}>
+            ${(foodItem.price * quantity).toFixed(2)}
           </Text>
         </View>
         
@@ -365,7 +343,45 @@ const FoodDetailScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING[4],
+  },
+  loadingText: {
+    marginTop: SPACING[2],
+    fontSize: FONTS.sizes.base,
+    textAlign: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING[4],
+  },
+  errorTitle: {
+    fontSize: FONTS.sizes.xl,
+    fontWeight: '700',
+    marginTop: SPACING[2],
+    marginBottom: SPACING[1],
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: FONTS.sizes.base,
+    textAlign: 'center',
+    marginBottom: SPACING[4],
+    lineHeight: 24,
+  },
+  retryButton: {
+    paddingHorizontal: SPACING[4],
+    paddingVertical: SPACING[2],
+    borderRadius: RADIUS.lg,
+  },
+  retryButtonText: {
+    fontSize: FONTS.sizes.base,
+    fontWeight: '600',
   },
   headerContainer: {
     position: 'relative',
@@ -390,8 +406,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: SPACING.base,
-    paddingTop: SPACING.sm,
+    paddingHorizontal: SPACING[4],
+    paddingTop: SPACING[2],
   },
   headerButton: {
     width: 40,
@@ -403,59 +419,47 @@ const styles = StyleSheet.create({
   },
   badgesContainer: {
     position: 'absolute',
-    bottom: SPACING.base,
-    left: SPACING.base,
+    bottom: SPACING[4],
+    left: SPACING[4],
     flexDirection: 'row',
-    gap: SPACING.xs,
+    gap: SPACING[1],
   },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING[2],
     paddingVertical: 4,
     borderRadius: RADIUS.lg,
     gap: 4,
   },
-  vegetarianBadge: {
-    backgroundColor: COLORS.success,
-  },
-  calorieBadge: {
-    backgroundColor: COLORS.info,
-  },
-  timeBadge: {
-    backgroundColor: COLORS.warning,
-  },
   badgeText: {
-    color: COLORS.white,
+    color: '#FFFFFF',
     fontSize: FONTS.sizes.xs,
     fontWeight: '600',
   },
   content: {
     flex: 1,
-    backgroundColor: COLORS.white,
   },
   foodInfo: {
-    padding: SPACING.base,
+    padding: SPACING[4],
   },
   foodHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING[2],
   },
   foodTitleContainer: {
     flex: 1,
-    marginRight: SPACING.base,
+    marginRight: SPACING[4],
   },
   foodName: {
     fontSize: FONTS.sizes['2xl'],
     fontWeight: 'bold',
-    color: COLORS.text.primary,
     marginBottom: 4,
   },
   restaurantName: {
     fontSize: FONTS.sizes.base,
-    color: COLORS.text.secondary,
   },
   priceContainer: {
     alignItems: 'flex-end',
@@ -463,232 +467,122 @@ const styles = StyleSheet.create({
   price: {
     fontSize: FONTS.sizes.xl,
     fontWeight: 'bold',
-    color: COLORS.primary,
   },
   originalPrice: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.text.secondary,
     textDecorationLine: 'line-through',
     marginTop: 2,
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.base,
+    marginBottom: SPACING[4],
   },
   ratingStars: {
     flexDirection: 'row',
-    marginRight: SPACING.xs,
+    marginRight: SPACING[1],
   },
   ratingText: {
     fontSize: FONTS.sizes.base,
     fontWeight: '600',
-    color: COLORS.text.primary,
-    marginRight: SPACING.xs,
+    marginRight: SPACING[1],
   },
   reviewsText: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.text.secondary,
   },
   description: {
     fontSize: FONTS.sizes.base,
-    color: COLORS.text.secondary,
     lineHeight: 24,
   },
   section: {
-    padding: SPACING.base,
+    padding: SPACING[4],
     borderTopWidth: 1,
-    borderTopColor: COLORS.gray[200],
   },
   sectionTitle: {
     fontSize: FONTS.sizes.lg,
     fontWeight: 'bold',
-    color: COLORS.text.primary,
-    marginBottom: SPACING.base,
-  },
-  sizeSelector: {
-    padding: SPACING.base,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.gray[200],
-  },
-  sizeOptions: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  sizeOption: {
-    flex: 1,
-    padding: SPACING.base,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.gray[300],
-    alignItems: 'center',
-  },
-  sizeOptionActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primary + '10',
-  },
-  sizeOptionText: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    marginBottom: 4,
-  },
-  sizeOptionTextActive: {
-    color: COLORS.primary,
-  },
-  sizeOptionPrice: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.text.secondary,
-  },
-  sizeOptionPriceActive: {
-    color: COLORS.primary,
-    fontWeight: '600',
+    marginBottom: SPACING[4],
   },
   ingredientsList: {
-    gap: SPACING.sm,
+    gap: SPACING[2],
   },
   ingredientItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: SPACING[2],
   },
   ingredientText: {
     fontSize: FONTS.sizes.base,
-    color: COLORS.text.primary,
   },
   allergensList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: SPACING.xs,
+    gap: SPACING[1],
   },
   allergenItem: {
-    backgroundColor: COLORS.error + '20',
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING[2],
     paddingVertical: 4,
     borderRadius: RADIUS.sm,
   },
   allergenText: {
     fontSize: FONTS.sizes.xs,
-    color: COLORS.error,
     fontWeight: '600',
   },
   quantitySelector: {
-    padding: SPACING.base,
+    padding: SPACING[4],
     borderTopWidth: 1,
-    borderTopColor: COLORS.gray[200],
   },
   quantityControls: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING.base,
+    gap: SPACING[4],
   },
   quantityButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: COLORS.gray[100],
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: COLORS.primary,
+    borderColor: '#3B82F6',
   },
   quantityButtonDisabled: {
-    borderColor: COLORS.gray[300],
-    backgroundColor: COLORS.gray[50],
+    borderColor: '#D1D5DB',
+    backgroundColor: '#F9FAFB',
   },
   quantityText: {
     fontSize: FONTS.sizes.xl,
     fontWeight: 'bold',
-    color: COLORS.text.primary,
     minWidth: 40,
     textAlign: 'center',
   },
   instructionsInput: {
     borderWidth: 1,
-    borderColor: COLORS.gray[300],
     borderRadius: RADIUS.lg,
-    padding: SPACING.base,
+    padding: SPACING[4],
     fontSize: FONTS.sizes.base,
-    color: COLORS.text.primary,
     minHeight: 80,
-    backgroundColor: COLORS.gray[50],
-  },
-  reviewsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.base,
-  },
-  seeAllText: {
-    fontSize: FONTS.sizes.base,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  reviewItem: {
-    marginBottom: SPACING.base,
-    padding: SPACING.base,
-    backgroundColor: COLORS.gray[50],
-    borderRadius: RADIUS.lg,
-  },
-  reviewHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.xs,
-  },
-  reviewUserInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  reviewAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.gray[200],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  reviewUserName: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-  },
-  reviewDate: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.text.secondary,
-  },
-  reviewRating: {
-    flexDirection: 'row',
-  },
-  reviewComment: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.text.secondary,
-    lineHeight: 18,
   },
   bottomContainer: {
-    padding: SPACING.base,
-    backgroundColor: COLORS.white,
+    padding: SPACING[4],
     borderTopWidth: 1,
-    borderTopColor: COLORS.gray[200],
     ...SHADOWS.lg,
   },
   totalContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.base,
+    marginBottom: SPACING[4],
   },
   totalLabel: {
     fontSize: FONTS.sizes.lg,
     fontWeight: '600',
-    color: COLORS.text.primary,
   },
   totalPrice: {
     fontSize: FONTS.sizes.xl,
     fontWeight: 'bold',
-    color: COLORS.primary,
   },
   addToCartButton: {
     width: '100%',

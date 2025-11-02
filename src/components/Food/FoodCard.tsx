@@ -96,14 +96,23 @@ const FoodCard: React.FC<FoodCardProps> = ({
     }
   };
 
-  const renderPrice = () => (
-    <View style={styles.priceContainer}>
-      <Text style={styles.price}>${foodItem.price.toFixed(2)}</Text>
-      {foodItem.originalPrice && foodItem.originalPrice > foodItem.price && (
-        <Text style={styles.originalPrice}>${foodItem.originalPrice.toFixed(2)}</Text>
-      )}
-    </View>
-  );
+  const renderPrice = () => {
+    const price = foodItem.price ?? 0;
+    const originalPrice = foodItem.originalPrice ?? 0;
+    
+    // Ensure price is a number
+    const numericPrice = typeof price === 'number' ? price : parseFloat(price) || 0;
+    const numericOriginalPrice = typeof originalPrice === 'number' ? originalPrice : parseFloat(originalPrice) || 0;
+    
+    return (
+      <View style={styles.priceContainer}>
+        <Text style={styles.price}>${numericPrice.toFixed(2)}</Text>
+        {numericOriginalPrice > 0 && numericOriginalPrice > numericPrice && (
+          <Text style={styles.originalPrice}>${numericOriginalPrice.toFixed(2)}</Text>
+        )}
+      </View>
+    );
+  };
 
   const renderQuantitySelector = () => {
     if (!showQuantitySelector || quantityInCart === 0) {

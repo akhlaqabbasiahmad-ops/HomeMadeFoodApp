@@ -1,3 +1,4 @@
+import { authService } from '../services/authService';
 import { useAppDispatch, useAppSelector } from '../store';
 import {
     loginFailure,
@@ -5,50 +6,7 @@ import {
     loginSuccess,
     logout as logoutAction,
 } from '../store/authSlice';
-import { LoginCredentials, SignupData, UseAuthReturn, User } from '../types';
-
-// Mock API calls - replace with actual API integration
-const mockLoginAPI = async (credentials: LoginCredentials) => {
-  return new Promise<{ user: User; token: string; refreshToken: string }>((resolve, reject) => {
-    setTimeout(() => {
-      if (credentials.email && credentials.password) {
-        resolve({
-          user: {
-            id: '1',
-            name: 'John Doe',
-            email: credentials.email,
-            phone: '+1 (555) 123-4567',
-          },
-          token: 'mock-jwt-token',
-          refreshToken: 'mock-refresh-token',
-        });
-      } else {
-        reject(new Error('Invalid credentials'));
-      }
-    }, 1000);
-  });
-};
-
-const mockSignupAPI = async (data: SignupData) => {
-  return new Promise<{ user: User; token: string; refreshToken: string }>((resolve, reject) => {
-    setTimeout(() => {
-      if (data.name && data.email && data.password) {
-        resolve({
-          user: {
-            id: '1',
-            name: data.name,
-            email: data.email,
-            phone: data.phone || '',
-          },
-          token: 'mock-jwt-token',
-          refreshToken: 'mock-refresh-token',
-        });
-      } else {
-        reject(new Error('Invalid data'));
-      }
-    }, 1000);
-  });
-};
+import { LoginCredentials, SignupData, UseAuthReturn } from '../types';
 
 export const useAuth = (): UseAuthReturn => {
   const dispatch = useAppDispatch();
@@ -57,7 +15,7 @@ export const useAuth = (): UseAuthReturn => {
   const login = async (credentials: LoginCredentials): Promise<void> => {
     try {
       dispatch(loginStart());
-      const result = await mockLoginAPI(credentials);
+      const result = await authService.login(credentials);
       dispatch(loginSuccess(result));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
@@ -69,7 +27,7 @@ export const useAuth = (): UseAuthReturn => {
   const signup = async (data: SignupData): Promise<void> => {
     try {
       dispatch(loginStart()); // Reuse login loading state for signup
-      const result = await mockSignupAPI(data);
+      const result = await authService.signup(data);
       dispatch(loginSuccess(result));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Signup failed';
@@ -79,6 +37,7 @@ export const useAuth = (): UseAuthReturn => {
   };
 
   const logout = (): void => {
+    authService.logout();
     dispatch(logoutAction());
   };
 

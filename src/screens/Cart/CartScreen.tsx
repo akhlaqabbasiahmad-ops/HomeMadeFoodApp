@@ -120,10 +120,16 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
               <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
               <Text style={styles.itemRestaurant} numberOfLines={1}>{item.restaurantName}</Text>
               <View style={styles.priceContainer}>
-                <Text style={styles.itemPrice}>${item.price.toFixed(2)}</Text>
-                {item.originalPrice && item.originalPrice > item.price && (
-                  <Text style={styles.originalPrice}>${item.originalPrice.toFixed(2)}</Text>
-                )}
+                <Text style={styles.itemPrice}>
+                  ${(typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0).toFixed(2)}
+                </Text>
+                {(() => {
+                  const price = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
+                  const origPrice = typeof item.originalPrice === 'number' ? item.originalPrice : parseFloat(item.originalPrice) || 0;
+                  return origPrice > 0 && origPrice > price && (
+                    <Text style={styles.originalPrice}>${origPrice.toFixed(2)}</Text>
+                  );
+                })()}
               </View>
             </View>
             

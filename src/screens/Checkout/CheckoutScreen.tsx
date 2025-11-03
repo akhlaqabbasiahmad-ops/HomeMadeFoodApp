@@ -62,13 +62,24 @@ const CheckoutScreen = () => {
   // Uses /users/{userId}/addresses endpoint with Authorization header
   const fetchAddresses = useCallback(async () => {
     if (!isAuthenticated || !user?.id) {
+      if (__DEV__) {
+        console.log('Checkout: Cannot fetch addresses - not authenticated or no user ID');
+      }
       setAddresses([]);
       return;
     }
 
     setAddressesLoading(true);
     try {
+      if (__DEV__) {
+        console.log('Checkout: Fetching addresses for user ID:', user.id);
+      }
       const response = await apiService.getAddresses(user.id);
+      
+      if (__DEV__) {
+        console.log('Checkout: Addresses API response:', response);
+      }
+      
       if (response.success && response.data) {
         const normalizedAddresses: Address[] = response.data.map((addr: any) => ({
           id: addr.id || addr._id || '',
@@ -78,6 +89,11 @@ const CheckoutScreen = () => {
           longitude: typeof addr.longitude === 'number' ? addr.longitude : parseFloat(addr.longitude) || 0,
           isDefault: addr.isDefault || false,
         }));
+        
+        if (__DEV__) {
+          console.log('Checkout: Normalized addresses:', normalizedAddresses);
+        }
+        
         setAddresses(normalizedAddresses);
         
         // Set default address if available, but don't override user selection
@@ -89,11 +105,14 @@ const CheckoutScreen = () => {
           return normalizedAddresses.find(addr => addr.isDefault) || normalizedAddresses[0] || null;
         });
       } else {
+        if (__DEV__) {
+          console.log('Checkout: No addresses found or API returned error:', response);
+        }
         setAddresses([]);
       }
     } catch (error) {
       if (__DEV__) {
-        console.error('Error fetching addresses:', error);
+        console.error('Checkout: Error fetching addresses:', error);
       }
       setAddresses([]);
     } finally {

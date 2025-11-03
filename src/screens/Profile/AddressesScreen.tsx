@@ -27,13 +27,24 @@ const AddressesScreen: React.FC = () => {
 
   const fetchAddresses = useCallback(async () => {
     if (!isAuthenticated || !user?.id) {
+      if (__DEV__) {
+        console.log('Cannot fetch addresses - not authenticated or no user ID');
+      }
       setAddresses([]);
       return;
     }
 
     setIsLoading(true);
     try {
+      if (__DEV__) {
+        console.log('Fetching addresses for user ID:', user.id);
+      }
       const response = await apiService.getAddresses(user.id);
+      
+      if (__DEV__) {
+        console.log('Addresses API response:', response);
+      }
+      
       if (response.success && response.data) {
         const normalizedAddresses: Address[] = response.data.map((addr: any) => ({
           id: addr.id || addr._id || '',
@@ -43,8 +54,16 @@ const AddressesScreen: React.FC = () => {
           longitude: typeof addr.longitude === 'number' ? addr.longitude : parseFloat(addr.longitude) || 0,
           isDefault: addr.isDefault || false,
         }));
+        
+        if (__DEV__) {
+          console.log('Normalized addresses:', normalizedAddresses);
+        }
+        
         setAddresses(normalizedAddresses);
       } else {
+        if (__DEV__) {
+          console.log('No addresses found or API returned error:', response);
+        }
         setAddresses([]);
       }
     } catch (error) {

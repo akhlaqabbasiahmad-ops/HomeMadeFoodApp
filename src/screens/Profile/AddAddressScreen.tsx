@@ -95,6 +95,9 @@ const AddAddressScreen: React.FC = () => {
       const response = await apiService.addAddress(user.id, addressData);
 
       if (response.success) {
+        if (__DEV__) {
+          console.log('Address saved successfully:', response.data);
+        }
         Alert.alert(
           'Success',
           'Address added successfully!',
@@ -110,12 +113,16 @@ const AddAddressScreen: React.FC = () => {
                   longitude: '',
                   isDefault: false,
                 });
+                // Navigate back - this will trigger useFocusEffect in AddressesScreen
                 router.back();
               },
             },
           ]
         );
       } else {
+        if (__DEV__) {
+          console.error('Failed to save address:', response.error);
+        }
         Alert.alert('Error', response.error || 'Failed to add address');
       }
     } catch (error) {

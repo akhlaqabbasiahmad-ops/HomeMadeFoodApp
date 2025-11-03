@@ -130,83 +130,100 @@ const OrderHistoryScreen = () => {
     return ['pending', 'confirmed'].includes(status);
   };
 
-  const formatDate = (date: Date): string => {
-    return new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(date));
+  const formatDate = (date: Date | string | undefined): string => {
+    if (!date) return 'N/A';
+    try {
+      const dateObj = date instanceof Date ? date : new Date(date);
+      if (isNaN(dateObj.getTime())) return 'Invalid Date';
+      return new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(dateObj);
+    } catch (error) {
+      return 'Invalid Date';
+    }
   };
 
-  const renderOrderItem = ({ item }: { item: Order }) => (
-    <TouchableOpacity
-      style={[styles.orderCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-      onPress={() => handleViewDetails(item.id)}
-    >
-      <View style={styles.orderHeader}>
-        <View style={styles.orderInfo}>
-          <Text style={[styles.orderId, { color: colors.text.primary }]}>
-            Order #{item.id.substring(0, 8)}
-          </Text>
-          <Text style={[styles.restaurantName, { color: colors.text.secondary }]}>
-            {item.restaurantName}
-          </Text>
-          <Text style={[styles.orderDate, { color: colors.text.tertiary }]}>
-            {formatDate(item.orderDate)}
-          </Text>
-        </View>
-        
-        <View style={styles.orderStatus}>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-              {getStatusText(item.status)}
+  const renderOrderItem = ({ item }: { item: Order }) => {
+    // Safely handle potentially undefined/null values
+    const orderId = item?.id || 'unknown';
+    const restaurantName = item?.restaurantName || 'Unknown Restaurant';
+    const orderDate = item?.orderDate;
+    const status = item?.status || 'pending';
+    const grandTotal = typeof item?.grandTotal === 'number' ? item.grandTotal : 0;
+    const items = item?.items || [];
+    
+    return (
+      <TouchableOpacity
+        style={[styles.orderCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        onPress={() => handleViewDetails(orderId)}
+      >
+        <View style={styles.orderHeader}>
+          <View style={styles.orderInfo}>
+            <Text style={[styles.orderId, { color: colors.text.primary }]}>
+              Order #{orderId.length >= 8 ? orderId.substring(0, 8) : orderId}
+            </Text>
+            <Text style={[styles.restaurantName, { color: colors.text.secondary }]}>
+              {restaurantName}
+            </Text>
+            <Text style={[styles.orderDate, { color: colors.text.tertiary }]}>
+              {formatDate(orderDate)}
             </Text>
           </View>
-          <Text style={[styles.orderTotal, { color: colors.text.primary }]}>
-            ${item.grandTotal.toFixed(2)}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.orderDetails}>
-        <Text style={[styles.itemCount, { color: colors.text.secondary }]}>
-          {item.items?.length || 0} {(item.items?.length || 0) === 1 ? 'item' : 'items'}
-        </Text>
-        
-        <View style={styles.orderActions}>
-          <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: colors.background }]}
-            onPress={() => handleViewDetails(item.id)}
-          >
-            <Ionicons name="receipt-outline" size={16} color={colors.primary} />
-            <Text style={[styles.actionText, { color: colors.text.secondary }]}>Details</Text>
-          </TouchableOpacity>
           
-          {item.status === 'delivered' && (
+          <View style={styles.orderStatus}>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(status as OrderStatus) + '20' }]}>
+              <Text style={[styles.statusText, { color: getStatusColor(status as OrderStatus) }]}>
+                {getStatusText(status as OrderStatus)}
+              </Text>
+            </View>
+            <Text style={[styles.orderTotal, { color: colors.text.primary }]}>
+              ${grandTotal.toFixed(2)}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.orderDetails}>
+          <Text style={[styles.itemCount, { color: colors.text.secondary }]}>
+            {items.length} {items.length === 1 ? 'item' : 'items'}
+          </Text>
+          
+          <View style={styles.orderActions}>
             <TouchableOpacity 
               style={[styles.actionButton, { backgroundColor: colors.background }]}
-              onPress={() => handleReorder(item.id)}
+              onPress={() => handleViewDetails(orderId)}
             >
-              <Ionicons name="refresh-outline" size={16} color={colors.secondary} />
-              <Text style={[styles.actionText, { color: colors.text.secondary }]}>Reorder</Text>
+              <Ionicons name="receipt-outline" size={16} color={colors.primary} />
+              <Text style={[styles.actionText, { color: colors.text.secondary }]}>Details</Text>
             </TouchableOpacity>
-          )}
+            
+            {status === 'delivered' && (
+              <TouchableOpacity 
+                style={[styles.actionButton, { backgroundColor: colors.background }]}
+                onPress={() => handleReorder(orderId)}
+              >
+                <Ionicons name="refresh-outline" size={16} color={colors.secondary} />
+                <Text style={[styles.actionText, { color: colors.text.secondary }]}>Reorder</Text>
+              </TouchableOpacity>
+            )}
 
-          {canCancelOrder(item.status) && (
-            <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: colors.error + '20' }]}
-              onPress={() => handleCancelOrder(item.id)}
-            >
-              <Ionicons name="close-circle-outline" size={16} color={colors.error} />
-              <Text style={[styles.actionText, { color: colors.error }]}>Cancel</Text>
-            </TouchableOpacity>
-          )}
+            {canCancelOrder(status as OrderStatus) && (
+              <TouchableOpacity 
+                style={[styles.actionButton, { backgroundColor: colors.error + '20' }]}
+                onPress={() => handleCancelOrder(orderId)}
+              >
+                <Ionicons name="close-circle-outline" size={16} color={colors.error} />
+                <Text style={[styles.actionText, { color: colors.error }]}>Cancel</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
@@ -245,9 +262,9 @@ const OrderHistoryScreen = () => {
 
       {/* Order List */}
       <FlatList
-        data={orderHistory}
+        data={orderHistory || []}
         renderItem={renderOrderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item, index) => item?.id || `order-${index}`}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
